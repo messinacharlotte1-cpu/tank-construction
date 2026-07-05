@@ -1,0 +1,33 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# env / secrets (clés MoMo/OM/WhatsApp/SMS côté serveur uniquement)
+.env
+.env.*
+!.env.example
+
+# prisma
+apps/api/prisma/*.db
+
+# vercel
+.vercel/
+
+# os / editors
+.DS_Store
+Thumbs.db
+*.log
+
+# client binaries (docs métier — hors dépôt)
+*.pdf
+*.pptx
+*.xls
+*.xlsx
+*.docx
