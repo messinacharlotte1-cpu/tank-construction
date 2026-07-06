@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { C, FONTS, Card, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Chantier = { id: string; nom: string };
-type Pointage = { id: string; ouvrier: string; date: string; statut: string };
+type Pointage = { id: string; ouvrier: string; tarif: number; date: string; statut: string };
+const COEF: Record<string, number> = { P: 1, DM: 0.5, A: 0 };
 const STATUTS: Record<string, [string, string]> = {
   P: ["Présent", C.green],
   DM: ["Demi-journée", C.amber],
@@ -17,7 +18,7 @@ export default function PointageLive() {
   const [rows, setRows] = useState<Pointage[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ ouvrier: "", statut: "P" });
+  const [form, setForm] = useState({ ouvrier: "", statut: "P", tarif: "" });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function PointageLive() {
 
   async function loadPointages(cid: string) {
     if (!cid) return;
-    const { data, error } = await supabase.from("pointages").select("id,ouvrier,date,statut").eq("chantierId", cid).order("ouvrier");
+    const { data, error } = await supabase.from("pointages").select("id,ouvrier,tarif,date,statut").eq("chantierId", cid).order("ouvrier");
     if (error) setErr(error.message);
     else setRows((data as Pointage[]) ?? []);
   }
@@ -43,11 +44,11 @@ export default function PointageLive() {
     if (!chantierId) return;
     setBusy(true); setErr(null);
     const { error } = await supabase.from("pointages").insert({
-      id: crypto.randomUUID(), chantierId, ouvrier: form.ouvrier, statut: form.statut, date: new Date().toISOString(),
+      id: crypto.randomUUID(), chantierId, ouvrier: form.ouvrier, tarif: Number(form.tarif) || 0, statut: form.statut, date: new Date().toISOString(),
     });
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    setForm({ ouvrier: "", statut: "P" });
+    setForm({ ouvrier: "", statut: "P", tarif: "" });
     void loadPointages(chantierId);
   }
   async function remove(id: string) {
@@ -67,11 +68,12 @@ export default function PointageLive() {
         <select style={{ ...input, marginTop: 6, width: "100%" }} value={chantierId} onChange={(e) => setChantierId(e.target.value)}>
           {chantiers.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
         </select>
-        <form onSubmit={add} style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr auto", gap: 10, marginTop: 14 }}>
+        <form onSubmit={add} style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr 1.2fr auto", gap: 10, marginTop: 14 }}>
           <input style={input} placeholder="Nom de l'ouvrier" value={form.ouvrier} onChange={(e) => setForm({ ...form, ouvrier: e.target.value })} required />
           <select style={input} value={form.statut} onChange={(e) => setForm({ ...form, statut: e.target.value })}>
             {Object.entries(STATUTS).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}
           </select>
+          <input style={input} placeholder="Tarif/jour FCFA" type="number" value={form.tarif} onChange={(e) => setForm({ ...form, tarif: e.target.value })} />
           <button type="submit" disabled={busy} style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", fontFamily: FONTS.sans, display: "flex", alignItems: "center", gap: 6 }}>
             <Plus size={16} /> {busy ? "…" : "Pointer"}
           </button>
@@ -79,28 +81,35 @@ export default function PointageLive() {
       </Card>
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
+      <Card style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ color: C.steelSoft, fontWeight: 600, textTransform: "uppercase", fontSize: 12, letterSpacing: 0.6 }}>Paie du jour (P=1 · DM=0,5 · A=0)</span>
+        <span style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: C.steel }}>{fcfa(rows.reduce((s, p) => s + Number(p.tarif) * (COEF[p.statut] ?? 0), 0))}</span>
+      </Card>
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
-              <th style={{ padding: 12 }}>Ouvrier</th><th style={{ padding: 12 }}>Date</th><th style={{ padding: 12 }}>Statut</th><th></th>
+              <th style={{ padding: 12 }}>Ouvrier</th><th style={{ padding: 12 }}>Date</th><th style={{ padding: 12 }}>Statut</th><th style={{ padding: 12 }}>Tarif</th><th style={{ padding: 12 }}>Paie jour</th><th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((p) => {
               const [label, color] = STATUTS[p.statut] ?? [p.statut, C.steelSoft];
+              const paie = Number(p.tarif) * (COEF[p.statut] ?? 0);
               return (
                 <tr key={p.id} style={{ borderTop: `1px solid ${C.line}` }}>
                   <td style={{ padding: 12, fontWeight: 600 }}>{p.ouvrier}</td>
                   <td style={{ padding: 12 }}>{new Date(p.date).toLocaleDateString("fr-FR")}</td>
                   <td style={{ padding: 12 }}><span style={{ color, fontWeight: 700, fontSize: 13 }}>{label}</span></td>
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>{fcfa(Number(p.tarif))}</td>
+                  <td style={{ padding: 12, whiteSpace: "nowrap", fontWeight: 600 }}>{fcfa(paie)}</td>
                   <td style={{ padding: 12, textAlign: "right" }}>
                     <button onClick={() => remove(p.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                   </td>
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={4} style={{ padding: 16, color: C.steelSoft }}>Aucun pointage pour ce chantier.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 16, color: C.steelSoft }}>Aucun pointage pour ce chantier.</td></tr>}
           </tbody>
         </table>
       </Card>

@@ -29,6 +29,7 @@ import MeteoLive from "../modules/MeteoLive";
 import AoBpuLive from "../modules/AoBpuLive";
 import MessagerieLive from "../modules/MessagerieLive";
 import Vitrine from "../modules/Vitrine";
+import SituationsLive from "../modules/SituationsLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 type Page = { id: string; label: string; icon: typeof HardHat; roles?: string[]; render: () => JSX.Element };
@@ -45,6 +46,7 @@ const PAGES: Page[] = [
   { id: "materiel", label: "Matériel", icon: Wrench, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <MaterielLive /> },
   { id: "devis", label: "Devis", icon: FileSignature, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <DevisLive /> },
   { id: "ao", label: "AO / BPU", icon: Scale, roles: ["DIRECTION", "COMMERCIAL"], render: () => <AoBpuLive /> },
+  { id: "situations", label: "Situations", icon: FileText, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <SituationsLive /> },
   { id: "factures", label: "Factures", icon: FileText, roles: ["DIRECTION", "COMPTA", "COMMERCIAL"], render: () => <FacturesLive /> },
   { id: "stocks", label: "Stocks", icon: Package, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <StocksLive /> },
   { id: "fournisseurs", label: "Fournisseurs", icon: Truck, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA"], render: () => <FournisseursLive /> },

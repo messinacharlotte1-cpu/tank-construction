@@ -32,6 +32,7 @@ model Tenant {
   settings   Setting[]
   bpuOuvrages BpuOuvrage[]
   messages   Message[]
+  situations Situation[]
   auditLogs  AuditLog[]
 
   @@map("tenants")
@@ -141,6 +142,7 @@ model Pointage {
   chantierId String
   chantier   Chantier       @relation(fields: [chantierId], references: [id])
   ouvrier    String
+  tarif      Int            @default(0) // FCFA/jour pour calcul paie du jour
   date       DateTime
   statut     StatutPointage
   // Offline-first : idempotence via uuid client (dernier écrit gagne + audit).
@@ -176,25 +178,56 @@ model Lot {
   nom     String
   ordre   Int    @default(0)
 
-  lignes Ligne[]
+  sousOuvrages SousOuvrage[]
 
   @@index([devisId])
   @@map("lots")
 }
 
-// Unités valides : u, m², m³, kg, ml, ff, pm, ens, mois. `pm` = pour mémoire (jamais chiffré).
-model Ligne {
-  id          String @id @default(uuid())
-  lotId       String
-  lot         Lot    @relation(fields: [lotId], references: [id])
-  designation String
-  unite       String
-  quantite    Float
-  prixUnitaire BigInt // FCFA
-  ordre       Int    @default(0)
+// Niveau intermédiaire DQE : Lot → Sous-ouvrage → Ligne.
+model SousOuvrage {
+  id    String @id @default(uuid())
+  lotId String
+  lot   Lot    @relation(fields: [lotId], references: [id])
+  nom   String
+  ordre Int    @default(0)
+
+  lignes Ligne[]
 
   @@index([lotId])
+  @@map("sous_ouvrages")
+}
+
+// Unités valides : u, m², m³, kg, ml, ff, pm, ens, mois. `pm` = pour mémoire (jamais chiffré).
+model Ligne {
+  id            String      @id @default(uuid())
+  sousOuvrageId String
+  sousOuvrage   SousOuvrage @relation(fields: [sousOuvrageId], references: [id])
+  designation   String
+  unite         String
+  quantite      Float
+  prixUnitaire  BigInt // FCFA
+  ordre         Int         @default(0)
+
+  @@index([sousOuvrageId])
   @@map("lignes")
+}
+
+// Situation de travaux : avancement cumulé + retenue de garantie 10 %.
+model Situation {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  chantier   String
+  numero     String
+  cumulPct   Float    @default(0)
+  montantHT  BigInt   @default(0) // FCFA, montant travaux cumulé HT
+  retenuePct Float    @default(10)
+  statut     String   @default("Brouillon")
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("situations")
 }
 
 enum ModePaiement {
