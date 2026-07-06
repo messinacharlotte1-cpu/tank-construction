@@ -1,5 +1,29 @@
-// Génération PDF côté navigateur (impression → "Enregistrer en PDF").
-// Mêmes layouts que l'aperçu écran. À terme : rendu serveur (API NestJS) depuis les mêmes gabarits.
+import { supabase } from "./supabase";
+
+// ── PDF SERVEUR (Supabase Edge Function `document-pdf`, Deno + pdf-lib) ──
+export type PdfBlock =
+  | { type: "h"; text: string }
+  | { type: "p"; text: string }
+  | { type: "table"; head: string[]; rows: string[][] }
+  | { type: "spacer" };
+export type PdfPayload = { title: string; subtitle?: string; blocks: PdfBlock[] };
+
+export async function serverPdf(filename: string, payload: PdfPayload) {
+  const { data, error } = await supabase.functions.invoke("document-pdf", { body: payload });
+  if (error) {
+    alert("PDF serveur indisponible (fonction non déployée ?).\n" + error.message);
+    return;
+  }
+  const blob = data instanceof Blob ? data : new Blob([data as BlobPart], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename + ".pdf";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Génération PDF côté navigateur (impression → "Enregistrer en PDF"). Fallback hors-ligne.
 export function printDocument(title: string, bodyHtml: string) {
   const w = window.open("", "_blank", "width=900,height=1200");
   if (!w) {

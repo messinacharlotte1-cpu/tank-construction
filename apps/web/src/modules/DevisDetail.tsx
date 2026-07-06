@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, FileCheck, Printer } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, FileCheck, Printer, Server } from "lucide-react";
 import { C, FONTS, Card, StatutBadge, fcfa, TVA_DEFAULT } from "@tank/ui";
 import { supabase } from "../lib/supabase";
-import { printDocument, fcfaP } from "../lib/pdf";
+import { printDocument, serverPdf, fcfaP, type PdfBlock } from "../lib/pdf";
 
 // Unités valides (cf. CLAUDE.md). `pm` = pour mémoire → jamais chiffré.
 const UNITES = ["u", "m²", "m³", "kg", "ml", "ff", "pm", "ens", "mois"];
@@ -99,6 +99,29 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
     printDocument(`Devis-${numero}`, body);
   }
 
+  function pdfServeur() {
+    const blocks: PdfBlock[] = [];
+    for (const lot of lots) {
+      const ls = lignes.filter((l) => l.lotId === lot.id);
+      const st = ls.reduce((s, l) => s + montantLigne(l), 0);
+      blocks.push({ type: "h", text: lot.nom });
+      blocks.push({
+        type: "table",
+        head: ["Désignation", "U", "Qté", "P.U.", "Montant"],
+        rows: [
+          ...ls.map((l) => [l.designation, l.unite, l.unite === "pm" ? "—" : String(l.quantite), l.unite === "pm" ? "—" : fcfaP(Number(l.prixUnitaire)), l.unite === "pm" ? "p.m." : fcfaP(montantLigne(l))]),
+          ["", "", "", "Sous-total", fcfaP(st)],
+        ],
+      });
+    }
+    blocks.push({ type: "spacer" });
+    blocks.push({
+      type: "table", head: ["", ""],
+      rows: [["Total HT", fcfaP(totalHT)], [`Remise ${remise} %`, "− " + fcfaP(remiseAmt)], ["HT après remise", fcfaP(htNet)], [`TVA ${(TVA_DEFAULT * 100).toLocaleString("fr-FR")} %`, fcfaP(tva)], ["TOTAL TTC", fcfaP(ttc)]],
+    });
+    void serverPdf(`Devis-${numero}`, { title: `Devis ${numero}`, subtitle: `Client : ${client}`, blocks });
+  }
+
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
 
   return (
@@ -110,7 +133,8 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontWeight: 700, color: C.steel }}>{numero} · {client}</span>
           <StatutBadge s={statut} />
-          <button onClick={pdf} style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}><Printer size={14} /> PDF</button>
+          <button onClick={pdf} title="PDF via le navigateur" style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}><Printer size={14} /> PDF</button>
+          <button onClick={pdfServeur} title="PDF généré côté serveur (edge function)" style={{ display: "flex", alignItems: "center", gap: 6, background: C.orange, color: C.white, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}><Server size={14} /> PDF serveur</button>
         </div>
       </div>
 

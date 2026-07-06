@@ -38,6 +38,7 @@ enum Role {
   COMPTA
   COMMERCIAL
   TERRAIN
+  ACQUEREUR
 }
 
 enum AccesMode {
@@ -299,11 +300,13 @@ model Reservation {
   lotImmoId String
   lotImmo   LotImmo  @relation(fields: [lotImmoId], references: [id])
   acquereur String
+  userId    String? // compte acquéreur rattaché (auth.uid) — accès portail scopé
   date      DateTime @default(now())
 
   appels AppelDeFonds[]
 
   @@index([lotImmoId])
+  @@index([userId])
   @@map("reservations")
 }
 

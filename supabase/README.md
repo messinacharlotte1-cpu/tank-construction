@@ -37,4 +37,21 @@ Active RLS sur les 13 tables et verrouille (seul le serveur/service_role accède
 pnpm --filter @tank/api exec prisma db pull   # doit refléter les 13 tables
 ```
 
-> Prochaine étape (hors "branchement") : auth/RBAC + policies RLS scopées par tenant, puis remplacer les données factices du front par de vraies requêtes.
+## 6. PDF serveur (Edge Function)
+
+`supabase/functions/document-pdf` génère les PDF côté serveur (Deno + pdf-lib). Déploiement :
+
+```bash
+# une fois : lier le projet
+supabase link --project-ref pegxkhkrveverhoqetyh
+# déployer la fonction (JWT vérifié par défaut → seul un utilisateur connecté peut l'appeler)
+supabase functions deploy document-pdf --project-ref pegxkhkrveverhoqetyh
+```
+
+Le front l'appelle via `serverPdf()` (`apps/web/src/lib/pdf.ts`) → bouton **« PDF serveur »** (DevisDetail). Tant que non déployée, le bouton affiche un message ; le bouton **« PDF »** (navigateur) reste disponible en fallback.
+
+## 7. Migrations SQL appliquées
+
+`0002` auth+RLS · `0003` user démo · `0004` modules · `0005` promotion+DQE · `0006` contrats+RBAC · `0007` write par rôle + acquéreurs · `0008` fix récursion self-policies acquéreur.
+
+> Comptes démo (mdp `TankDemo2026!`) : `demo@` DIRECTION · `commercial@` COMMERCIAL · `terrain@` TERRAIN · `acquereur@tank.cm` ACQUEREUR (portail isolé à sa réservation).

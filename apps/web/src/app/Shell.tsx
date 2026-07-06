@@ -19,7 +19,7 @@ import PortailAcquereur from "../modules/PortailAcquereur";
 type Page = { id: string; label: string; icon: typeof HardHat; roles?: string[]; render: () => JSX.Element };
 
 const PAGES: Page[] = [
-  { id: "dashboard", label: "Pilotage", icon: LayoutDashboard, render: () => <Dashboard /> },
+  { id: "dashboard", label: "Pilotage", icon: LayoutDashboard, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: () => <Dashboard /> },
   { id: "chantiers", label: "Chantiers", icon: Building2, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <ChantiersLive /> },
   { id: "pointage", label: "Pointage", icon: ClipboardCheck, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <PointageLive /> },
   { id: "devis", label: "Devis", icon: FileSignature, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <DevisLive /> },
@@ -28,7 +28,7 @@ const PAGES: Page[] = [
   { id: "programmes", label: "Programmes", icon: Landmark, roles: ["DIRECTION", "COMMERCIAL"], render: () => <ProgrammesLive /> },
   { id: "vefa", label: "VEFA", icon: Banknote, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <AppelsVefaLive /> },
   { id: "contrats", label: "Contrats", icon: ScrollText, roles: ["DIRECTION", "COMMERCIAL"], render: () => <ContratsLive /> },
-  { id: "portail", label: "Portail acquéreur", icon: UserCircle, roles: ["DIRECTION", "COMMERCIAL"], render: () => <PortailAcquereur /> },
+  { id: "portail", label: "Portail acquéreur", icon: UserCircle, roles: ["DIRECTION", "COMMERCIAL", "ACQUEREUR"], render: () => <PortailAcquereur /> },
 ];
 
 export default function Shell({ email, onShowProto }: { email?: string; onShowProto: () => void }) {
