@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature,
+  HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -10,6 +10,8 @@ import FacturesLive from "../modules/FacturesLive";
 import StocksLive from "../modules/StocksLive";
 import PointageLive from "../modules/PointageLive";
 import DevisLive from "../modules/DevisLive";
+import ProgrammesLive from "../modules/ProgrammesLive";
+import AppelsVefaLive from "../modules/AppelsVefaLive";
 
 type Page = { id: string; label: string; icon: typeof HardHat; render: () => JSX.Element };
 
@@ -20,6 +22,8 @@ const PAGES: Page[] = [
   { id: "devis", label: "Devis", icon: FileSignature, render: () => <DevisLive /> },
   { id: "factures", label: "Factures", icon: FileText, render: () => <FacturesLive /> },
   { id: "stocks", label: "Stocks", icon: Package, render: () => <StocksLive /> },
+  { id: "programmes", label: "Programmes", icon: Landmark, render: () => <ProgrammesLive /> },
+  { id: "vefa", label: "VEFA", icon: Banknote, render: () => <AppelsVefaLive /> },
 ];
 
 export default function Shell({ email, onShowProto }: { email?: string; onShowProto: () => void }) {

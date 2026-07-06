@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, PencilRuler } from "lucide-react";
 import { C, FONTS, Card, StatutBadge } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
+import DevisDetail from "./DevisDetail";
 
 type Devis = { id: string; numero: string; client: string; statut: string };
 const STATUTS = ["Brouillon", "Envoyé", "Accepté", "Refusé"];
@@ -13,6 +14,7 @@ export default function DevisLive() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ numero: "", client: "", statut: "Brouillon" });
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<Devis | null>(null);
 
   async function load() {
     setLoading(true);
@@ -43,6 +45,8 @@ export default function DevisLive() {
   }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
+
+  if (open) return <DevisDetail devisId={open.id} numero={open.numero} client={open.client} statut={open.statut} onBack={() => { setOpen(null); void load(); }} />;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -78,7 +82,8 @@ export default function DevisLive() {
                   <td style={{ padding: 12, fontWeight: 600 }}>{d.numero}</td>
                   <td style={{ padding: 12 }}>{d.client}</td>
                   <td style={{ padding: 12 }}><StatutBadge s={d.statut} /></td>
-                  <td style={{ padding: 12, textAlign: "right" }}>
+                  <td style={{ padding: 12, textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button onClick={() => setOpen(d)} title="Ouvrir le DQE" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer", color: C.orange, marginRight: 8, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}><PencilRuler size={14} /> DQE</button>
                     <button onClick={() => remove(d.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                   </td>
                 </tr>

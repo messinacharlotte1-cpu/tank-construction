@@ -23,6 +23,7 @@ model Tenant {
   devis      Devis[]
   factures   Facture[]
   articles   Article[]
+  programmes Programme[]
   auditLogs  AuditLog[]
 
   @@map("tenants")
@@ -114,6 +115,7 @@ model Jalon {
   libelle    String
   valide     Boolean   @default(false)
   valideLe   DateTime?
+  appels     AppelDeFonds[]
 
   @@index([chantierId])
   @@map("jalons")
@@ -146,6 +148,7 @@ model Devis {
   numero   String // préfixe paramétrable DEV-, séquence par exercice
   client   String
   statut   String   @default("Brouillon")
+  remisePct Float   @default(0) // remise appliquée sur le total HT (avant TVA)
   // Snapshot à l'émission : taux (TVA) + totaux figés en JSON. Jamais recalculés.
   snapshot Json?
   createdAt DateTime @default(now())
@@ -249,4 +252,78 @@ model AuditLog {
 
   @@index([tenantId, createdAt])
   @@map("audit_log")
+}
+
+// ── Promotion immobilière ─────────────────────────────────
+model Programme {
+  id        String    @id @default(uuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  nom       String
+  ville     String
+  createdAt DateTime  @default(now())
+
+  lots LotImmo[]
+
+  @@index([tenantId])
+  @@map("programmes")
+}
+
+enum StatutLotImmo {
+  DISPONIBLE
+  RESERVE
+  VENDU
+}
+
+model LotImmo {
+  id          String        @id @default(uuid())
+  programmeId String
+  programme   Programme     @relation(fields: [programmeId], references: [id])
+  reference   String
+  bloc        String?
+  niveau      String?
+  typologie   String? // T2, T3, villa…
+  surface     Float?
+  prix        BigInt // FCFA
+  statut      StatutLotImmo @default(DISPONIBLE)
+
+  reservations Reservation[]
+
+  @@index([programmeId])
+  @@map("lots_immo")
+}
+
+model Reservation {
+  id        String   @id @default(uuid())
+  lotImmoId String
+  lotImmo   LotImmo  @relation(fields: [lotImmoId], references: [id])
+  acquereur String
+  date      DateTime @default(now())
+
+  appels AppelDeFonds[]
+
+  @@index([lotImmoId])
+  @@map("reservations")
+}
+
+enum StatutAppel {
+  PREVU
+  EMIS
+  PAYE
+}
+
+// VEFA : un appel de fonds n'est émissible que si son jalon chantier est validé (constat contradictoire).
+model AppelDeFonds {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  jalonId       String?
+  jalon         Jalon?      @relation(fields: [jalonId], references: [id])
+  libelle       String
+  montant       BigInt // FCFA
+  echeance      DateTime?
+  statut        StatutAppel @default(PREVU)
+
+  @@index([reservationId])
+  @@map("appels_de_fonds")
 }
