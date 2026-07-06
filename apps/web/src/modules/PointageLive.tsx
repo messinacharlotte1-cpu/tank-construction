@@ -1,0 +1,109 @@
+import { useEffect, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import { C, FONTS, Card } from "@tank/ui";
+import { supabase } from "../lib/supabase";
+
+type Chantier = { id: string; nom: string };
+type Pointage = { id: string; ouvrier: string; date: string; statut: string };
+const STATUTS: Record<string, [string, string]> = {
+  P: ["Présent", C.green],
+  DM: ["Demi-journée", C.amber],
+  A: ["Absent", C.red],
+};
+
+export default function PointageLive() {
+  const [chantiers, setChantiers] = useState<Chantier[]>([]);
+  const [chantierId, setChantierId] = useState<string>("");
+  const [rows, setRows] = useState<Pointage[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ ouvrier: "", statut: "P" });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("chantiers").select("id,nom").order("nom");
+      const list = (data as Chantier[]) ?? [];
+      setChantiers(list);
+      if (list[0]) setChantierId(list[0].id);
+      setLoading(false);
+    })();
+  }, []);
+
+  async function loadPointages(cid: string) {
+    if (!cid) return;
+    const { data, error } = await supabase.from("pointages").select("id,ouvrier,date,statut").eq("chantierId", cid).order("ouvrier");
+    if (error) setErr(error.message);
+    else setRows((data as Pointage[]) ?? []);
+  }
+  useEffect(() => { if (chantierId) void loadPointages(chantierId); }, [chantierId]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chantierId) return;
+    setBusy(true); setErr(null);
+    const { error } = await supabase.from("pointages").insert({
+      id: crypto.randomUUID(), chantierId, ouvrier: form.ouvrier, statut: form.statut, date: new Date().toISOString(),
+    });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setForm({ ouvrier: "", statut: "P" });
+    void loadPointages(chantierId);
+  }
+  async function remove(id: string) {
+    const { error } = await supabase.from("pointages").delete().eq("id", id);
+    if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
+  }
+
+  const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
+
+  if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
+  if (chantiers.length === 0) return <div style={{ color: C.steelSoft }}>Aucun chantier — créez-en un d'abord.</div>;
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <Card>
+        <label style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft }}>Chantier</label>
+        <select style={{ ...input, marginTop: 6, width: "100%" }} value={chantierId} onChange={(e) => setChantierId(e.target.value)}>
+          {chantiers.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
+        </select>
+        <form onSubmit={add} style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr auto", gap: 10, marginTop: 14 }}>
+          <input style={input} placeholder="Nom de l'ouvrier" value={form.ouvrier} onChange={(e) => setForm({ ...form, ouvrier: e.target.value })} required />
+          <select style={input} value={form.statut} onChange={(e) => setForm({ ...form, statut: e.target.value })}>
+            {Object.entries(STATUTS).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}
+          </select>
+          <button type="submit" disabled={busy} style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", fontFamily: FONTS.sans, display: "flex", alignItems: "center", gap: 6 }}>
+            <Plus size={16} /> {busy ? "…" : "Pointer"}
+          </button>
+        </form>
+      </Card>
+
+      {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <thead>
+            <tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
+              <th style={{ padding: 12 }}>Ouvrier</th><th style={{ padding: 12 }}>Date</th><th style={{ padding: 12 }}>Statut</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => {
+              const [label, color] = STATUTS[p.statut] ?? [p.statut, C.steelSoft];
+              return (
+                <tr key={p.id} style={{ borderTop: `1px solid ${C.line}` }}>
+                  <td style={{ padding: 12, fontWeight: 600 }}>{p.ouvrier}</td>
+                  <td style={{ padding: 12 }}>{new Date(p.date).toLocaleDateString("fr-FR")}</td>
+                  <td style={{ padding: 12 }}><span style={{ color, fontWeight: 700, fontSize: 13 }}>{label}</span></td>
+                  <td style={{ padding: 12, textAlign: "right" }}>
+                    <button onClick={() => remove(p.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && <tr><td colSpan={4} style={{ padding: 16, color: C.steelSoft }}>Aucun pointage pour ce chantier.</td></tr>}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}

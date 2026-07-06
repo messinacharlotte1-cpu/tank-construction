@@ -7,3 +7,10 @@ const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 export const isSupabaseConfigured = Boolean(url && anon);
 
 export const supabase = createClient(url ?? "http://invalid.local", anon ?? "anon-missing");
+
+// Tenant du user courant (via fonction SQL SECURITY DEFINER). Requis pour les inserts (RLS with check).
+export async function getTenant(): Promise<string | null> {
+  const { data } = await supabase.rpc("current_tenant");
+  return (data as string) ?? null;
+}
+
