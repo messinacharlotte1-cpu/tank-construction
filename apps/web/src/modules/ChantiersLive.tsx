@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { HardHat, Plus, Trash2, MapPin } from "lucide-react";
+import { HardHat, Plus, Trash2, MapPin, ListChecks } from "lucide-react";
 import { C, FONTS, Card, StatutBadge, Progress, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
+import ChantierDetail from "./ChantierDetail";
 
 // Enum Postgres (Prisma StatutChantier) → libellé UI attendu par StatutBadge.
 const STATUT_LABEL: Record<string, string> = {
@@ -32,6 +33,7 @@ export default function ChantiersLive() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ nom: "", client: "", ville: "", budget: "" });
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<Chantier | null>(null);
 
   async function load() {
     setLoading(true);
@@ -88,6 +90,8 @@ export default function ChantiersLive() {
     padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans,
   };
 
+  if (open) return <ChantierDetail chantier={open} onBack={() => setOpen(null)} />;
+
   return (
     <div style={{ display: "grid", gap: 20 }}>
       <Card>
@@ -128,7 +132,10 @@ export default function ChantiersLive() {
               </div>
               <div style={{ marginTop: 4 }}><Progress pct={pct} color={pct > 90 ? C.red : C.orange} /></div>
               <div style={{ marginTop: 8, fontSize: 13, color: C.steel }}>{fcfa(c.consomme)} / {fcfa(c.budget)}</div>
-              <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
+                <button onClick={() => setOpen(c)} title="Tâches & jalons" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: C.orange, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <ListChecks size={14} /> Tâches & jalons
+                </button>
                 <button onClick={() => remove(c.id)} title="Supprimer" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: C.red, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
                   <Trash2 size={14} /> Supprimer
                 </button>

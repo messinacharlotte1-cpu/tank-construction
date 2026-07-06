@@ -25,6 +25,11 @@ model Tenant {
   articles   Article[]
   programmes Programme[]
   contrats   Contrat[]
+  fournisseurs Fournisseur[]
+  sousTraitants SousTraitant[]
+  materiels  Materiel[]
+  incidents  Incident[]
+  settings   Setting[]
   auditLogs  AuditLog[]
 
   @@map("tenants")
@@ -239,6 +244,90 @@ model Article {
 
   @@index([tenantId])
   @@map("articles")
+}
+
+// ── Ressources ────────────────────────────────────────────
+model Fournisseur {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  nom       String
+  categorie String? // Matériaux, Location, Services…
+  contact   String?
+  telephone String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("fournisseurs")
+}
+
+model SousTraitant {
+  id                String   @id @default(uuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  nom               String
+  corpsEtat         String // maçonnerie, électricité…
+  chantier          String?
+  montantMarche     BigInt   @default(0) // FCFA
+  retenueGarantiePct Float   @default(5)
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("sous_traitants")
+}
+
+enum StatutMateriel {
+  DISPONIBLE
+  EN_SERVICE
+  MAINTENANCE
+}
+
+model Materiel {
+  id               String         @id @default(uuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  nom              String
+  type             String? // engin, véhicule, outillage
+  statut           StatutMateriel @default(DISPONIBLE)
+  prochainEntretien DateTime?
+  createdAt        DateTime       @default(now())
+
+  @@index([tenantId])
+  @@map("materiels")
+}
+
+enum GraviteIncident {
+  MINEUR
+  MAJEUR
+  CRITIQUE
+}
+
+model Incident {
+  id          String          @id @default(uuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  chantier    String?
+  date        DateTime        @default(now())
+  gravite     GraviteIncident @default(MINEUR)
+  description String
+  mesure      String? // mesure corrective
+  createdAt   DateTime        @default(now())
+
+  @@index([tenantId])
+  @@map("incidents")
+}
+
+// Paramètres versionnés par tenant (taux TVA/CNPS, préfixes numérotation…). Changement ne réécrit jamais un document émis.
+model Setting {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  cle      String
+  valeur   String
+
+  @@unique([tenantId, cle])
+  @@index([tenantId])
+  @@map("settings")
 }
 
 // Audit append-only (aucun UPDATE/DELETE applicatif), 12 mois mini.
