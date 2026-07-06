@@ -41,6 +41,17 @@ export default function FacturesLive() {
     const { error } = await supabase.from("factures").delete().eq("id", id);
     if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
   }
+  async function paiement(f: Facture) {
+    const montant = Number(window.prompt(`Paiement facture ${f.numero} (TTC ${f.ttc}) — montant FCFA :`, String(f.ttc)));
+    if (!montant || montant <= 0) return;
+    const mode = (window.prompt("Mode (MOMO / OM / VIREMENT / ESPECES) :", "MOMO") ?? "MOMO").toUpperCase();
+    const { error: pe } = await supabase.from("paiements").insert({ id: crypto.randomUUID(), factureId: f.id, montant, mode, refTransaction: "SIM-" + Date.now(), date: new Date().toISOString() });
+    if (pe) return setErr(pe.message.includes("row-level") ? "Droits insuffisants (rôle) pour un paiement." : pe.message);
+    const { data: pays } = await supabase.from("paiements").select("montant").eq("factureId", f.id);
+    const total = (pays ?? []).reduce((s, p) => s + Number(p.montant), 0);
+    if (total >= Number(f.ttc)) await supabase.from("factures").update({ statut: "Payée" }).eq("id", f.id);
+    void load();
+  }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
 
@@ -77,7 +88,8 @@ export default function FacturesLive() {
                   <td style={{ padding: 12 }}>{f.client}</td>
                   <td style={{ padding: 12 }}>{fcfa(Number(f.ttc))}</td>
                   <td style={{ padding: 12 }}><StatutBadge s={f.statut} /></td>
-                  <td style={{ padding: 12, textAlign: "right" }}>
+                  <td style={{ padding: 12, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {f.statut !== "Payée" && <button onClick={() => paiement(f)} title="Enregistrer un paiement" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", color: C.green, fontWeight: 700, marginRight: 10 }}>Paiement</button>}
                     <button onClick={() => remove(f.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                   </td>
                 </tr>

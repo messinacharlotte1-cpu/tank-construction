@@ -4,18 +4,23 @@ import { isSupabaseConfigured } from "./lib/supabase";
 import { useSession } from "./auth/useSession";
 import Login from "./auth/Login";
 import Shell from "./app/Shell";
+import Vitrine from "./modules/Vitrine";
 // Maquette UX complète (prototype validé client) — accessible en lecture.
 import TankPrototype from "./prototype/TankPrototype.jsx";
 
 export default function App() {
   const { session, loading } = useSession();
   const [showProto, setShowProto] = useState(false);
+  const [showVitrine, setShowVitrine] = useState(false);
 
   // Sans variables Supabase (build sans env) → on sert la maquette (démo).
   if (!isSupabaseConfigured) return <TankPrototype />;
 
   if (loading) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: C.steelSoft }}>Chargement…</div>;
-  if (!session) return <Login />;
+  if (!session) {
+    if (showVitrine) return <Vitrine onBack={() => setShowVitrine(false)} />;
+    return <Login onVitrine={() => setShowVitrine(true)} />;
+  }
 
   if (showProto) {
     return (

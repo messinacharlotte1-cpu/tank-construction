@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings,
+  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -22,6 +23,12 @@ import FournisseursLive from "../modules/FournisseursLive";
 import SousTraitanceLive from "../modules/SousTraitanceLive";
 import EquipeLive from "../modules/EquipeLive";
 import ParametresLive from "../modules/ParametresLive";
+import PlanningGantt from "../modules/PlanningGantt";
+import PredictionsLive from "../modules/PredictionsLive";
+import MeteoLive from "../modules/MeteoLive";
+import AoBpuLive from "../modules/AoBpuLive";
+import MessagerieLive from "../modules/MessagerieLive";
+import Vitrine from "../modules/Vitrine";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 type Page = { id: string; label: string; icon: typeof HardHat; roles?: string[]; render: () => JSX.Element };
@@ -29,11 +36,15 @@ type Page = { id: string; label: string; icon: typeof HardHat; roles?: string[];
 const PAGES: Page[] = [
   { id: "dashboard", label: "Pilotage", icon: LayoutDashboard, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: () => <Dashboard /> },
   { id: "rentabilite", label: "Rentabilité", icon: TrendingUp, roles: ["DIRECTION", "COMPTA"], render: () => <RentabiliteLive /> },
+  { id: "predictions", label: "Prédictions", icon: Sparkles, roles: ["DIRECTION", "COMPTA"], render: () => <PredictionsLive /> },
+  { id: "planning", label: "Planning", icon: Calendar, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <PlanningGantt /> },
+  { id: "meteo", label: "Météo", icon: CloudSun, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <MeteoLive /> },
   { id: "chantiers", label: "Chantiers", icon: Building2, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <ChantiersLive /> },
   { id: "pointage", label: "Pointage", icon: ClipboardCheck, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <PointageLive /> },
   { id: "incidents", label: "Incidents", icon: ShieldAlert, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <IncidentsLive /> },
   { id: "materiel", label: "Matériel", icon: Wrench, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <MaterielLive /> },
   { id: "devis", label: "Devis", icon: FileSignature, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <DevisLive /> },
+  { id: "ao", label: "AO / BPU", icon: Scale, roles: ["DIRECTION", "COMMERCIAL"], render: () => <AoBpuLive /> },
   { id: "factures", label: "Factures", icon: FileText, roles: ["DIRECTION", "COMPTA", "COMMERCIAL"], render: () => <FacturesLive /> },
   { id: "stocks", label: "Stocks", icon: Package, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <StocksLive /> },
   { id: "fournisseurs", label: "Fournisseurs", icon: Truck, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA"], render: () => <FournisseursLive /> },
@@ -42,6 +53,8 @@ const PAGES: Page[] = [
   { id: "vefa", label: "VEFA", icon: Banknote, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <AppelsVefaLive /> },
   { id: "contrats", label: "Contrats", icon: ScrollText, roles: ["DIRECTION", "COMMERCIAL"], render: () => <ContratsLive /> },
   { id: "portail", label: "Portail acquéreur", icon: UserCircle, roles: ["DIRECTION", "COMMERCIAL", "ACQUEREUR"], render: () => <PortailAcquereur /> },
+  { id: "vitrine", label: "Vitrine", icon: Store, roles: ["DIRECTION", "COMMERCIAL"], render: () => <Vitrine embedded /> },
+  { id: "messagerie", label: "Messagerie", icon: MessageCircle, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: () => <MessagerieLive /> },
   { id: "equipe", label: "Équipe", icon: UserCog, roles: ["DIRECTION", "SUPER_ADMIN"], render: () => <EquipeLive /> },
   { id: "parametres", label: "Paramètres", icon: Settings, roles: ["DIRECTION", "SUPER_ADMIN"], render: () => <ParametresLive /> },
 ];

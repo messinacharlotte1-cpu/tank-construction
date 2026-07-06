@@ -40,6 +40,16 @@ export default function StocksLive() {
     const { error } = await supabase.from("articles").delete().eq("id", id);
     if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
   }
+  async function mouvement(a: Article, type: "ENTREE" | "SORTIE") {
+    const q = Number(window.prompt(`${type === "ENTREE" ? "Entrée" : "Sortie"} — quantité (${a.unite}) :`, "0"));
+    if (!q || q <= 0) return;
+    const motif = window.prompt("Motif :", type === "ENTREE" ? "Livraison" : "Consommation chantier") ?? null;
+    const { error: me } = await supabase.from("mouvements_stock").insert({ id: crypto.randomUUID(), articleId: a.id, type, quantite: q, motif, date: new Date().toISOString() });
+    if (me) return setErr(me.message.includes("row-level") ? "Droits insuffisants (rôle) pour un mouvement." : me.message);
+    const nouveau = type === "ENTREE" ? Number(a.stock) + q : Number(a.stock) - q;
+    await supabase.from("articles").update({ stock: nouveau }).eq("id", a.id);
+    void load();
+  }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
 
@@ -79,7 +89,9 @@ export default function StocksLive() {
                     <td style={{ padding: 12 }}>
                       {bas ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: C.red, fontSize: 12, fontWeight: 700 }}><AlertTriangle size={14} /> Sous seuil</span> : <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>OK</span>}
                     </td>
-                    <td style={{ padding: 12, textAlign: "right" }}>
+                    <td style={{ padding: 12, textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button onClick={() => mouvement(a, "ENTREE")} title="Entrée stock" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: C.green, fontWeight: 700, marginRight: 6 }}>+ Entrée</button>
+                      <button onClick={() => mouvement(a, "SORTIE")} title="Sortie stock" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: C.orange, fontWeight: 700, marginRight: 10 }}>− Sortie</button>
                       <button onClick={() => remove(a.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                     </td>
                   </tr>

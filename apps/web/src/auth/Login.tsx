@@ -3,7 +3,7 @@ import { HardHat } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
-export default function Login() {
+export default function Login({ onVitrine }: { onVitrine?: () => void }) {
   const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -58,6 +58,11 @@ export default function Login() {
         >
           {busy ? "Connexion…" : "Se connecter"}
         </button>
+        {onVitrine && (
+          <button type="button" onClick={onVitrine} style={{ width: "100%", marginTop: 10, padding: 10, background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, color: C.steelSoft, cursor: "pointer", fontFamily: FONTS.sans, fontSize: 13 }}>
+            Voir la vitrine publique →
+          </button>
+        )}
       </form>
     </div>
   );
