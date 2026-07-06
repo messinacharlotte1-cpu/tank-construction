@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings,
-  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store,
+  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -30,6 +30,8 @@ import AoBpuLive from "../modules/AoBpuLive";
 import MessagerieLive from "../modules/MessagerieLive";
 import Vitrine from "../modules/Vitrine";
 import SituationsLive from "../modules/SituationsLive";
+import ReservesLive from "../modules/ReservesLive";
+import MediasLive from "../modules/MediasLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 type Page = { id: string; label: string; icon: typeof HardHat; roles?: string[]; render: () => JSX.Element };
@@ -44,6 +46,8 @@ const PAGES: Page[] = [
   { id: "pointage", label: "Pointage", icon: ClipboardCheck, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <PointageLive /> },
   { id: "incidents", label: "Incidents", icon: ShieldAlert, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <IncidentsLive /> },
   { id: "materiel", label: "Matériel", icon: Wrench, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <MaterielLive /> },
+  { id: "reserves", label: "Réserves / OPR", icon: ClipboardCheck, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <ReservesLive /> },
+  { id: "medias", label: "Plans / Photos", icon: ImageIcon, roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <MediasLive /> },
   { id: "devis", label: "Devis", icon: FileSignature, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <DevisLive /> },
   { id: "ao", label: "AO / BPU", icon: Scale, roles: ["DIRECTION", "COMMERCIAL"], render: () => <AoBpuLive /> },
   { id: "situations", label: "Situations", icon: FileText, roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <SituationsLive /> },

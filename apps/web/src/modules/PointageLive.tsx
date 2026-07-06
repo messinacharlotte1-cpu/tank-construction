@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { C, FONTS, Card, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
+import { queuePointage, pendingCount, flushPointages } from "../lib/offline";
 
 type Chantier = { id: string; nom: string };
 type Pointage = { id: string; ouvrier: string; tarif: number; date: string; statut: string };
@@ -20,6 +21,25 @@ export default function PointageLive() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ouvrier: "", statut: "P", tarif: "" });
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(pendingCount());
+
+  const insertPointage = async (rec: Record<string, unknown>) => {
+    const { error } = await supabase.from("pointages").insert(rec as never);
+    return { error };
+  };
+
+  async function flush() {
+    const n = await flushPointages(insertPointage);
+    setPending(pendingCount());
+    if (n > 0 && chantierId) void loadPointages(chantierId);
+  }
+  useEffect(() => {
+    void flush();
+    const on = () => void flush();
+    window.addEventListener("online", on);
+    return () => window.removeEventListener("online", on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chantierId]);
 
   useEffect(() => {
     (async () => {
@@ -43,11 +63,19 @@ export default function PointageLive() {
     e.preventDefault();
     if (!chantierId) return;
     setBusy(true); setErr(null);
-    const { error } = await supabase.from("pointages").insert({
-      id: crypto.randomUUID(), chantierId, ouvrier: form.ouvrier, tarif: Number(form.tarif) || 0, statut: form.statut, date: new Date().toISOString(),
-    });
+    const rec = { id: crypto.randomUUID(), chantierId, ouvrier: form.ouvrier, tarif: Number(form.tarif) || 0, statut: form.statut, date: new Date().toISOString() };
+    if (!navigator.onLine) {
+      // Offline : mise en file, rejouée à la reconnexion (idempotent via id).
+      queuePointage(rec);
+      setPending(pendingCount());
+      setRows((r) => [...r, rec as never].sort((a, b) => (a as { ouvrier: string }).ouvrier.localeCompare((b as { ouvrier: string }).ouvrier)));
+      setBusy(false);
+      setForm({ ouvrier: "", statut: "P", tarif: "" });
+      return;
+    }
+    const { error } = await supabase.from("pointages").insert(rec);
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (error) { queuePointage(rec); setPending(pendingCount()); setErr("Hors-ligne ? Pointage mis en file."); return; }
     setForm({ ouvrier: "", statut: "P", tarif: "" });
     void loadPointages(chantierId);
   }
@@ -81,6 +109,7 @@ export default function PointageLive() {
       </Card>
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
+      {pending > 0 && <Card style={{ borderColor: C.amber, color: "#8a6d00", background: C.amberSoft }}>⚠ {pending} pointage(s) en file hors-ligne — synchronisation automatique à la reconnexion.</Card>}
       <Card style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ color: C.steelSoft, fontWeight: 600, textTransform: "uppercase", fontSize: 12, letterSpacing: 0.6 }}>Paie du jour (P=1 · DM=0,5 · A=0)</span>
         <span style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: C.steel }}>{fcfa(rows.reduce((s, p) => s + Number(p.tarif) * (COEF[p.statut] ?? 0), 0))}</span>

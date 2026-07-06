@@ -33,6 +33,8 @@ model Tenant {
   bpuOuvrages BpuOuvrage[]
   messages   Message[]
   situations Situation[]
+  reserves   Reserve[]
+  medias     Media[]
   auditLogs  AuditLog[]
 
   @@map("tenants")
@@ -383,6 +385,38 @@ model Setting {
   @@unique([tenantId, cle])
   @@index([tenantId])
   @@map("settings")
+}
+
+// Réserves / OPR (opérations préalables à la réception).
+model Reserve {
+  id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  chantier     String
+  localisation String?
+  description  String
+  entreprise   String?
+  statut       String    @default("Ouverte") // Ouverte | Levée
+  echeance     DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId])
+  @@map("reserves")
+}
+
+// Médias (plans/photos) + annotations épinglées (x,y) stockées en JSON.
+model Media {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  chantier    String
+  nom         String
+  url         String // URL publique Supabase Storage (bucket `medias`)
+  annotations Json? // [{ x, y, note, resolu }]
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("medias")
 }
 
 // Bibliothèque de prix (BPU) — base Yaoundé, coefficients régionaux appliqués côté app.
