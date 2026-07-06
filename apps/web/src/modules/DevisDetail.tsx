@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, FileCheck } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, FileCheck, Printer } from "lucide-react";
 import { C, FONTS, Card, StatutBadge, fcfa, TVA_DEFAULT } from "@tank/ui";
 import { supabase } from "../lib/supabase";
+import { printDocument, fcfaP } from "../lib/pdf";
 
 // Unités valides (cf. CLAUDE.md). `pm` = pour mémoire → jamais chiffré.
 const UNITES = ["u", "m²", "m³", "kg", "ml", "ff", "pm", "ens", "mois"];
@@ -78,6 +79,26 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
 
   const input: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: `1px solid ${C.line}`, fontSize: 13, fontFamily: FONTS.sans, width: "100%" };
 
+  function pdf() {
+    const lotsHtml = lots.map((lot) => {
+      const ls = lignes.filter((l) => l.lotId === lot.id);
+      const st = ls.reduce((s, l) => s + montantLigne(l), 0);
+      return `<h3>${lot.nom}</h3><table><thead><tr><th>Désignation</th><th>U</th><th class="right">Qté</th><th class="right">P.U.</th><th class="right">Montant</th></tr></thead><tbody>
+        ${ls.map((l) => `<tr><td>${l.designation}</td><td>${l.unite}</td><td class="right">${l.unite === "pm" ? "—" : l.quantite}</td><td class="right">${l.unite === "pm" ? "—" : fcfaP(Number(l.prixUnitaire))}</td><td class="right">${l.unite === "pm" ? "p.m." : fcfaP(montantLigne(l))}</td></tr>`).join("")}
+        <tr><td colspan="4" class="right"><b>Sous-total ${lot.nom}</b></td><td class="right"><b>${fcfaP(st)}</b></td></tr></tbody></table>`;
+    }).join("");
+    const body = `<div class="brand"><span class="logo">TANK</span><h1>Devis ${numero}</h1></div><div class="bar"></div>
+      <p class="muted">Client : ${client}</p>${lotsHtml}
+      <table style="max-width:360px;margin-left:auto"><tbody>
+        <tr><td>Total HT</td><td class="right">${fcfaP(totalHT)}</td></tr>
+        <tr><td>Remise ${remise} %</td><td class="right">− ${fcfaP(remiseAmt)}</td></tr>
+        <tr><td>HT après remise</td><td class="right">${fcfaP(htNet)}</td></tr>
+        <tr><td>TVA ${(TVA_DEFAULT * 100).toLocaleString("fr-FR")} %</td><td class="right">${fcfaP(tva)}</td></tr>
+        <tr><td><b>TOTAL TTC</b></td><td class="right"><b>${fcfaP(ttc)}</b></td></tr>
+      </tbody></table>`;
+    printDocument(`Devis-${numero}`, body);
+  }
+
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
 
   return (
@@ -89,6 +110,7 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontWeight: 700, color: C.steel }}>{numero} · {client}</span>
           <StatutBadge s={statut} />
+          <button onClick={pdf} style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}><Printer size={14} /> PDF</button>
         </div>
       </div>
 

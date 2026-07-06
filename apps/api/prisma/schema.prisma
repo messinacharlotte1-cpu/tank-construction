@@ -24,6 +24,7 @@ model Tenant {
   factures   Facture[]
   articles   Article[]
   programmes Programme[]
+  contrats   Contrat[]
   auditLogs  AuditLog[]
 
   @@map("tenants")
@@ -310,6 +311,27 @@ enum StatutAppel {
   PREVU
   EMIS
   PAYE
+}
+
+// Contrats (droit CM) — modèle indicatif tant que non validé notaire (cf. CLAUDE.md règle 10).
+// Signature électronique = OTP + horodatage + empreinte (hash) consignés dans otpLog.
+model Contrat {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  reference       String
+  type            String // VEFA | CONSTRUCTION | RESERVATION
+  client          String
+  objet           String?
+  montant         BigInt   @default(0) // FCFA
+  templateVersion String   @default("v0-indicatif")
+  statutSignature String   @default("Projet") // Projet | En attente OTP | Signé
+  otpLog          Json?
+  reservationId   String?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("contrats")
 }
 
 // VEFA : un appel de fonds n'est émissible que si son jalon chantier est validé (constat contradictoire).
