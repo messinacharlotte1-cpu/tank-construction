@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings,
-  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck,
+  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -36,13 +36,14 @@ import SecuriteLive from "../modules/SecuriteLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 // group = section de nav (reproduit l'organisation de la maquette).
-type Page = { id: string; label: string; icon: typeof HardHat; group: string; roles?: string[]; render: () => JSX.Element };
+type Nav = (id: string) => void;
+type Page = { id: string; label: string; icon: typeof HardHat; group: string; roles?: string[]; render: (go: Nav) => JSX.Element };
 
 // Ordre des sections comme dans la maquette.
 const GROUPS = ["Pilotage", "Opérations", "Commercial", "Promotion", "Ressources", "Administration"];
 
 const PAGES: Page[] = [
-  { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, group: "Pilotage", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: () => <Dashboard /> },
+  { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, group: "Pilotage", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: (go) => <Dashboard go={go} /> },
   { id: "rentabilite", label: "Rentabilité", icon: TrendingUp, group: "Pilotage", roles: ["DIRECTION", "COMPTA"], render: () => <RentabiliteLive /> },
   { id: "predictions", label: "Prédictions", icon: Sparkles, group: "Pilotage", roles: ["DIRECTION", "COMPTA"], render: () => <PredictionsLive /> },
 
@@ -79,6 +80,8 @@ const PAGES: Page[] = [
 export default function Shell({ email, onShowProto }: { email?: string; onShowProto: () => void }) {
   const [role, setRole] = useState<string>("");
   const [page, setPage] = useState("dashboard");
+  // Sections repliées par défaut ; seule la section de la page courante est ouverte.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["Pilotage"]));
 
   useEffect(() => {
     supabase.rpc("current_role").then(({ data }) => setRole((data as string) ?? ""));
@@ -86,6 +89,7 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
 
   const visible = PAGES.filter((p) => !p.roles || role === "SUPER_ADMIN" || p.roles.includes(role));
   const current = visible.find((p) => p.id === page) ?? visible[0];
+  const toggleGroup = (g: string) => setOpenGroups((s) => { const n = new Set(s); n.has(g) ? n.delete(g) : n.add(g); return n; });
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "220px 1fr", background: C.concrete }}>
@@ -95,27 +99,37 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
           <span style={{ fontFamily: FONTS.condensed, fontWeight: 700, fontSize: 18, textTransform: "uppercase", letterSpacing: 1 }}>Tank</span>
         </div>
         <nav style={{ padding: 10, display: "grid", gap: 2, flex: 1, overflow: "auto" }}>
-          {GROUPS.filter((g) => visible.some((p) => p.group === g)).map((g) => (
-            <div key={g}>
-              <div style={{ padding: "10px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#7B8A99" }}>{g}</div>
-              {visible.filter((p) => p.group === g).map((p) => {
-                const active = current && p.id === current.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setPage(p.id)}
-                    style={{
-                      width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
-                      border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
-                      background: active ? C.orange : "transparent", color: C.white, fontWeight: active ? 700 : 500,
-                    }}
-                  >
-                    <p.icon size={17} /> {p.label}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {GROUPS.filter((g) => visible.some((p) => p.group === g)).map((g) => {
+            const opened = openGroups.has(g);
+            const hasActive = current?.group === g;
+            return (
+              <div key={g}>
+                <button
+                  onClick={() => toggleGroup(g)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 6px", background: "transparent", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: hasActive ? C.orange : "#7B8A99" }}
+                >
+                  <span>{g}</span>
+                  {opened ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {opened && visible.filter((p) => p.group === g).map((p) => {
+                  const active = current && p.id === current.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setPage(p.id)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
+                        border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
+                        background: active ? C.orange : "transparent", color: C.white, fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      <p.icon size={17} /> {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
         <div style={{ padding: 10, borderTop: `1px solid ${C.steelMid}`, display: "grid", gap: 6 }}>
           <button onClick={onShowProto} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: `1px solid ${C.steelSoft}`, color: C.white, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 13, fontFamily: FONTS.sans }}>
@@ -134,7 +148,7 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
             <h1 style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, margin: "0 0 20px" }}>
               <current.icon size={24} color={C.orange} /> {current.label}
             </h1>
-            {current.render()}
+            {current.render(setPage)}
           </>
         )}
       </main>
