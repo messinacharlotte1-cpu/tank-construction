@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { montantLigne, dqeTotals, retenueGarantie, situationNet, paieJour, puRegional, mensualite } from "./calc";
+import { montantLigne, dqeTotals, retenueGarantie, situationNet, paieJour, puRegional, mensualite, cnps } from "./calc";
 
 describe("montantLigne", () => {
   it("quantité × PU", () => expect(montantLigne({ unite: "m³", quantite: 120, prixUnitaire: 8500 })).toBe(1020000));
@@ -50,6 +50,16 @@ describe("paieJour", () => {
 
 describe("puRegional", () => {
   it("Douala ×1.06", () => expect(puRegional(95000, 1.06)).toBe(100700));
+});
+
+describe("cnps", () => {
+  it("brut 100k : sal 4,2% / emp 11,95%", () => {
+    const c = cnps(100000, 4.2, 11.95);
+    expect(c.retenueSal).toBe(4200);
+    expect(c.chargeEmp).toBe(11950);
+    expect(c.net).toBe(95800);
+    expect(c.coutTotal).toBe(111950);
+  });
 });
 
 describe("mensualite", () => {

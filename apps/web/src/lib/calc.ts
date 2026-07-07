@@ -40,6 +40,13 @@ export function puRegional(puBase: number, coef: number): number {
   return Math.round(Number(puBase) * Number(coef));
 }
 
+// Cotisations CNPS : retenue salarié + charge employeur → net + coût total.
+export function cnps(brut: number, tauxSalPct: number, tauxEmpPct: number) {
+  const retenueSal = Math.round((brut * tauxSalPct) / 100);
+  const chargeEmp = Math.round((brut * tauxEmpPct) / 100);
+  return { retenueSal, chargeEmp, net: brut - retenueSal, coutTotal: brut + chargeEmp };
+}
+
 // Mensualité d'un prêt (amortissement constant). taux annuel en %, durée en mois.
 export function mensualite(principal: number, tauxAnnuelPct: number, mois: number): number {
   if (mois <= 0) return 0;

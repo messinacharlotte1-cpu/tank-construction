@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
-  TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings,
+  TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings, Wallet,
   Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
@@ -33,6 +33,7 @@ import SituationsLive from "../modules/SituationsLive";
 import ReservesLive from "../modules/ReservesLive";
 import MediasLive from "../modules/MediasLive";
 import SecuriteLive from "../modules/SecuriteLive";
+import PaieLive from "../modules/PaieLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 // group = section de nav (reproduit l'organisation de la maquette).
@@ -70,6 +71,7 @@ const PAGES: Page[] = [
   { id: "stocks", label: "Stocks", icon: Package, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <StocksLive /> },
   { id: "fournisseurs", label: "Fournisseurs", icon: Truck, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA"], render: () => <FournisseursLive /> },
   { id: "soustraitance", label: "Sous-traitance", icon: Users, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <SousTraitanceLive /> },
+  { id: "paie", label: "Paie CNPS", icon: Wallet, group: "Ressources", roles: ["DIRECTION", "COMPTA"], render: () => <PaieLive /> },
   { id: "messagerie", label: "Messagerie", icon: MessageCircle, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: () => <MessagerieLive /> },
 
   { id: "equipe", label: "Équipe", icon: UserCog, group: "Administration", roles: ["DIRECTION", "SUPER_ADMIN"], render: () => <EquipeLive /> },

@@ -19,6 +19,7 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
   const [sous, setSous] = useState<SousOuvrage[]>([]);
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [remise, setRemise] = useState(0);
+  const [surface, setSurface] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [newLot, setNewLot] = useState("");
@@ -82,8 +83,13 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
   const { totalHT, remiseAmt, htNet, tva, ttc } = dqeTotals(lignes, remise, TVA_DEFAULT);
 
   async function emettre() {
+    // Signature électronique simulée (OTP) — horodatage consigné dans le snapshot.
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const saisie = window.prompt(`Signature électronique du devis.\nCode OTP (simulé) : ${code}\nRe-saisir pour signer, ou Annuler pour émettre sans signature :`);
+    const signature = saisie === code ? { signeLe: new Date().toISOString(), canal: "OTP (simulé)" } : null;
     const snapshot = {
       emisLe: new Date().toISOString(), tvaRate: TVA_DEFAULT, totalHT, remisePct: remise, remiseAmt, htNet, tva, ttc,
+      surface, ratioM2: surface > 0 ? Math.round(ttc / surface) : null, signature,
       lots: lots.map((lot) => ({ nom: lot.nom, sousOuvrages: sous.filter((s) => s.lotId === lot.id).map((so) => ({ nom: so.nom, lignes: lignes.filter((l) => l.sousOuvrageId === so.id).map((l) => ({ designation: l.designation, unite: l.unite, quantite: Number(l.quantite), prixUnitaire: Number(l.prixUnitaire), montant: montantLigne(l) })) })) })),
     };
     const { error } = await supabase.from("devis").update({ snapshot, statut: "Envoyé", remisePct: remise }).eq("id", devisId);
@@ -193,7 +199,12 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
           <Row label="HT après remise" val={fcfa(htNet)} />
           <Row label={`TVA ${(TVA_DEFAULT * 100).toLocaleString("fr-FR")} %`} val={fcfa(tva)} />
           <div style={{ borderTop: `2px solid ${C.steel}`, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 17, color: C.steel }}><span>TOTAL TTC</span><span>{fcfa(ttc)}</span></div>
-          <button onClick={emettre} style={{ marginTop: 8, padding: 12, border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><FileCheck size={17} /> Émettre (fige les montants)</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+            <span style={{ color: C.steelSoft }}>Surface (m²)</span>
+            <input type="number" min="0" value={surface} onChange={(e) => setSurface(Number(e.target.value))} style={{ ...input, width: 90 }} />
+          </div>
+          {surface > 0 && <Row label="Ratio au m²" val={fcfa(Math.round(ttc / surface)) + "/m²"} />}
+          <button onClick={emettre} style={{ marginTop: 8, padding: 12, border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><FileCheck size={17} /> Émettre &amp; signer (OTP)</button>
         </div>
       </Card>
     </div>
