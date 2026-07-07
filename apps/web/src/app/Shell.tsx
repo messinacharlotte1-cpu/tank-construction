@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings,
-  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon,
+  Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -32,6 +32,7 @@ import Vitrine from "../modules/Vitrine";
 import SituationsLive from "../modules/SituationsLive";
 import ReservesLive from "../modules/ReservesLive";
 import MediasLive from "../modules/MediasLive";
+import SecuriteLive from "../modules/SecuriteLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 // group = section de nav (reproduit l'organisation de la maquette).
@@ -71,6 +72,7 @@ const PAGES: Page[] = [
   { id: "messagerie", label: "Messagerie", icon: MessageCircle, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA", "COMMERCIAL", "TERRAIN"], render: () => <MessagerieLive /> },
 
   { id: "equipe", label: "Équipe", icon: UserCog, group: "Administration", roles: ["DIRECTION", "SUPER_ADMIN"], render: () => <EquipeLive /> },
+  { id: "securite", label: "Sécurité (2FA)", icon: ShieldCheck, group: "Administration", roles: ["DIRECTION", "COMPTA", "SUPER_ADMIN"], render: () => <SecuriteLive /> },
   { id: "parametres", label: "Paramètres", icon: Settings, group: "Administration", roles: ["DIRECTION", "SUPER_ADMIN"], render: () => <ParametresLive /> },
 ];
 

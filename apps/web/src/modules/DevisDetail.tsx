@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2, FileCheck, Printer, Server } from "lucide-reac
 import { C, FONTS, Card, StatutBadge, fcfa, TVA_DEFAULT } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { printDocument, serverPdf, fcfaP, type PdfBlock } from "../lib/pdf";
+import { montantLigne as calcMontant, dqeTotals } from "../lib/calc";
 
 // Unités valides (cf. CLAUDE.md). `pm` = pour mémoire → jamais chiffré.
 const UNITES = ["u", "m²", "m³", "kg", "ml", "ff", "pm", "ens", "mois"];
@@ -11,7 +12,7 @@ type Lot = { id: string; nom: string; ordre: number };
 type SousOuvrage = { id: string; lotId: string; nom: string; ordre: number };
 type Ligne = { id: string; sousOuvrageId: string; designation: string; unite: string; quantite: number; prixUnitaire: number; ordre: number };
 
-const montantLigne = (l: Ligne) => (l.unite === "pm" ? 0 : Number(l.quantite) * Number(l.prixUnitaire));
+const montantLigne = (l: Ligne) => calcMontant(l);
 
 export default function DevisDetail({ devisId, numero, client, statut, onBack }: { devisId: string; numero: string; client: string; statut: string; onBack: () => void }) {
   const [lots, setLots] = useState<Lot[]>([]);
@@ -78,11 +79,7 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
   }
   async function saveRemise(v: number) { setRemise(v); await supabase.from("devis").update({ remisePct: v }).eq("id", devisId); }
 
-  const totalHT = lignes.reduce((s, l) => s + montantLigne(l), 0);
-  const remiseAmt = Math.round((totalHT * remise) / 100);
-  const htNet = totalHT - remiseAmt;
-  const tva = Math.round(htNet * TVA_DEFAULT);
-  const ttc = htNet + tva;
+  const { totalHT, remiseAmt, htNet, tva, ttc } = dqeTotals(lignes, remise, TVA_DEFAULT);
 
   async function emettre() {
     const snapshot = {

@@ -12,7 +12,7 @@ export default function DevisLive() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ numero: "", client: "", statut: "Brouillon" });
+  const [form, setForm] = useState({ client: "", statut: "Brouillon" });
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Devis | null>(null);
 
@@ -30,13 +30,15 @@ export default function DevisLive() {
     e.preventDefault();
     if (!tenantId) return;
     setBusy(true); setErr(null);
+    const { data: numero, error: ne } = await supabase.rpc("next_numero", { kind: "devis" });
+    if (ne) { setBusy(false); setErr(ne.message); return; }
     const { error } = await supabase.from("devis").insert({
-      id: crypto.randomUUID(), tenantId, numero: form.numero, client: form.client,
+      id: crypto.randomUUID(), tenantId, numero: numero as string, client: form.client,
       statut: form.statut, createdAt: new Date().toISOString(),
     });
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    setForm({ numero: "", client: "", statut: "Brouillon" });
+    setForm({ client: "", statut: "Brouillon" });
     void load();
   }
   async function remove(id: string) {
@@ -54,8 +56,7 @@ export default function DevisLive() {
         <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={18} color={C.orange} /> Nouveau devis
         </div>
-        <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr 1.4fr auto", gap: 10 }}>
-          <input style={input} placeholder="N° (DEV-…)" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} required />
+        <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr auto", gap: 10 }}>
           <input style={input} placeholder="Client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} required />
           <select style={input} value={form.statut} onChange={(e) => setForm({ ...form, statut: e.target.value })}>
             {STATUTS.map((s) => <option key={s}>{s}</option>)}
@@ -63,7 +64,7 @@ export default function DevisLive() {
           <button type="submit" disabled={busy} style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", fontFamily: FONTS.sans }}>{busy ? "…" : "Ajouter"}</button>
         </form>
         <div style={{ marginTop: 10, fontSize: 12, color: C.steelSoft }}>
-          Détail DQE (lots → sous-ouvrages → lignes, remise avant TVA, PDF) = prochaine itération.
+          N° attribué automatiquement (préfixe + exercice). Ouvrir le DQE pour lots → sous-ouvrages → lignes.
         </div>
       </Card>
 

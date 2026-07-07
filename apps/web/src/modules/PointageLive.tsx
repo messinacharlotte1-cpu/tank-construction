@@ -3,10 +3,10 @@ import { Plus, Trash2 } from "lucide-react";
 import { C, FONTS, Card, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { queuePointage, pendingCount, flushPointages } from "../lib/offline";
+import { paieJour, COEF_POINTAGE } from "../lib/calc";
 
 type Chantier = { id: string; nom: string };
 type Pointage = { id: string; ouvrier: string; tarif: number; date: string; statut: string };
-const COEF: Record<string, number> = { P: 1, DM: 0.5, A: 0 };
 const STATUTS: Record<string, [string, string]> = {
   P: ["Présent", C.green],
   DM: ["Demi-journée", C.amber],
@@ -112,7 +112,7 @@ export default function PointageLive() {
       {pending > 0 && <Card style={{ borderColor: C.amber, color: "#8a6d00", background: C.amberSoft }}>⚠ {pending} pointage(s) en file hors-ligne — synchronisation automatique à la reconnexion.</Card>}
       <Card style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ color: C.steelSoft, fontWeight: 600, textTransform: "uppercase", fontSize: 12, letterSpacing: 0.6 }}>Paie du jour (P=1 · DM=0,5 · A=0)</span>
-        <span style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: C.steel }}>{fcfa(rows.reduce((s, p) => s + Number(p.tarif) * (COEF[p.statut] ?? 0), 0))}</span>
+        <span style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: C.steel }}>{fcfa(paieJour(rows))}</span>
       </Card>
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -124,7 +124,7 @@ export default function PointageLive() {
           <tbody>
             {rows.map((p) => {
               const [label, color] = STATUTS[p.statut] ?? [p.statut, C.steelSoft];
-              const paie = Number(p.tarif) * (COEF[p.statut] ?? 0);
+              const paie = Number(p.tarif) * (COEF_POINTAGE[p.statut] ?? 0);
               return (
                 <tr key={p.id} style={{ borderTop: `1px solid ${C.line}` }}>
                   <td style={{ padding: 12, fontWeight: 600 }}>{p.ouvrier}</td>

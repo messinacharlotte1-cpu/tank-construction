@@ -11,7 +11,7 @@ export default function FacturesLive() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ numero: "", client: "", ttc: "", statut: "Brouillon" });
+  const [form, setForm] = useState({ client: "", ttc: "", statut: "Brouillon" });
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -28,13 +28,18 @@ export default function FacturesLive() {
     e.preventDefault();
     if (!tenantId) return;
     setBusy(true); setErr(null);
+    const { data: numero, error: ne } = await supabase.rpc("next_numero", { kind: "facture" });
+    if (ne) { setBusy(false); setErr(ne.message); return; }
+    const ttc = Number(form.ttc) || 0;
+    // Snapshot à l'émission : fige numéro/client/TTC/date. Un changement de paramètre ne le réécrit pas.
+    const snapshot = { emisLe: new Date().toISOString(), numero, client: form.client, ttc };
     const { error } = await supabase.from("factures").insert({
-      id: crypto.randomUUID(), tenantId, numero: form.numero, client: form.client,
-      ttc: Number(form.ttc) || 0, statut: form.statut, createdAt: new Date().toISOString(),
+      id: crypto.randomUUID(), tenantId, numero: numero as string, client: form.client,
+      ttc, statut: form.statut, snapshot, createdAt: new Date().toISOString(),
     });
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    setForm({ numero: "", client: "", ttc: "", statut: "Brouillon" });
+    setForm({ client: "", ttc: "", statut: "Brouillon" });
     void load();
   }
   async function remove(id: string) {
@@ -61,8 +66,7 @@ export default function FacturesLive() {
         <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={18} color={C.orange} /> Nouvelle facture
         </div>
-        <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr 1.4fr 1.4fr auto", gap: 10 }}>
-          <input style={input} placeholder="N° (FAC-…)" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} required />
+        <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr 1.4fr auto", gap: 10 }}>
           <input style={input} placeholder="Client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} required />
           <input style={input} placeholder="TTC FCFA" type="number" min="0" value={form.ttc} onChange={(e) => setForm({ ...form, ttc: e.target.value })} />
           <select style={input} value={form.statut} onChange={(e) => setForm({ ...form, statut: e.target.value })}>
