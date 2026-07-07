@@ -3,6 +3,7 @@ import { UserCircle, Home, ArrowLeft, Printer } from "lucide-react";
 import { C, FONTS, Card, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
+import { mensualite } from "../lib/calc";
 
 type Resa = {
   id: string; acquereur: string;
@@ -81,6 +82,8 @@ export default function PortailAcquereur() {
             </tbody>
           </table>
         </Card>
+
+        <Simulateur prixLot={lot ? Number(lot.prix) : 0} />
       </div>
     );
   }
@@ -102,5 +105,39 @@ export default function PortailAcquereur() {
         {resas.length === 0 && <div style={{ color: C.steelSoft }}>Aucune réservation.</div>}
       </div>
     </div>
+  );
+}
+
+function Simulateur({ prixLot }: { prixLot: number }) {
+  const [prix, setPrix] = useState(prixLot);
+  const [apport, setApport] = useState(Math.round(prixLot * 0.2));
+  const [taux, setTaux] = useState(8);
+  const [mois, setMois] = useState(60);
+
+  const finance = Math.max(0, prix - apport);
+  const m = mensualite(finance, taux, mois);
+  const total = m * mois;
+  const cout = total - finance;
+  const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans, width: "100%" };
+
+  return (
+    <Card>
+      <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 12 }}>Simulateur de financement</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
+        <label style={{ fontSize: 12, color: C.steelSoft }}>Prix (FCFA)<input style={inp} type="number" value={prix} onChange={(e) => setPrix(Number(e.target.value))} /></label>
+        <label style={{ fontSize: 12, color: C.steelSoft }}>Apport (FCFA)<input style={inp} type="number" value={apport} onChange={(e) => setApport(Number(e.target.value))} /></label>
+        <label style={{ fontSize: 12, color: C.steelSoft }}>Taux annuel (%)<input style={inp} type="number" step="0.1" value={taux} onChange={(e) => setTaux(Number(e.target.value))} /></label>
+        <label style={{ fontSize: 12, color: C.steelSoft }}>Durée (mois)<input style={inp} type="number" value={mois} onChange={(e) => setMois(Number(e.target.value))} /></label>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 12 }}>
+        {[["Montant financé", fcfa(finance), C.steel], ["Mensualité", fcfa(m), C.orange], ["Coût du crédit", fcfa(cout), C.red], ["Total remboursé", fcfa(total), C.steel]].map(([l, v, col], i) => (
+          <div key={i} style={{ background: C.concrete, borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 11, color: C.steelSoft, textTransform: "uppercase" }}>{l}</div>
+            <div style={{ fontFamily: FONTS.condensed, fontSize: 22, fontWeight: 700, color: col as string }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 10 }}>Estimation indicative (amortissement constant). Ne vaut pas offre de prêt.</div>
+    </Card>
   );
 }

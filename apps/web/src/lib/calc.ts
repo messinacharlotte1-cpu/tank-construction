@@ -39,3 +39,11 @@ export function paieJour(pointages: { tarif: number; statut: string }[]): number
 export function puRegional(puBase: number, coef: number): number {
   return Math.round(Number(puBase) * Number(coef));
 }
+
+// Mensualité d'un prêt (amortissement constant). taux annuel en %, durée en mois.
+export function mensualite(principal: number, tauxAnnuelPct: number, mois: number): number {
+  if (mois <= 0) return 0;
+  const r = Number(tauxAnnuelPct) / 100 / 12;
+  if (r === 0) return Math.round(principal / mois);
+  return Math.round((principal * r) / (1 - Math.pow(1 + r, -mois)));
+}

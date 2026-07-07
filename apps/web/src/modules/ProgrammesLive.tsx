@@ -115,6 +115,32 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
           <button type="submit" style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer" }}>Lot</button>
         </form>
       </Card>
+
+      {lots.length > 0 && (
+        <Card>
+          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 10 }}>Plan de masse</div>
+          <svg viewBox={`0 0 ${5 * 110} ${Math.ceil(lots.length / 5) * 80}`} style={{ width: "100%", maxWidth: 560 }}>
+            {lots.map((l, i) => {
+              const col = i % 5, row = Math.floor(i / 5);
+              const fill = l.statut === "VENDU" ? C.steelSoft : l.statut === "RESERVE" ? C.amber : C.green;
+              return (
+                <g key={l.id} onClick={() => cycle(l)} style={{ cursor: "pointer" }}>
+                  <rect x={col * 110 + 6} y={row * 80 + 6} width={98} height={64} rx={8} fill={fill} opacity={0.9} />
+                  <text x={col * 110 + 55} y={row * 80 + 34} textAnchor="middle" fill="#fff" fontSize={13} fontWeight={700}>{l.reference}</text>
+                  <text x={col * 110 + 55} y={row * 80 + 52} textAnchor="middle" fill="#fff" fontSize={10}>{l.typologie ?? ""}</text>
+                </g>
+              );
+            })}
+          </svg>
+          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: C.steelSoft }}>
+            <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.green, borderRadius: 2, marginRight: 4 }} />Disponible</span>
+            <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.amber, borderRadius: 2, marginRight: 4 }} />Réservé</span>
+            <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.steelSoft, borderRadius: 2, marginRight: 4 }} />Vendu</span>
+            <span style={{ marginLeft: "auto" }}>Cliquer un lot = changer le statut</span>
+          </div>
+        </Card>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
         {lots.map((l) => (
           <Card key={l.id}>

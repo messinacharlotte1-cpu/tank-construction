@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { montantLigne, dqeTotals, retenueGarantie, situationNet, paieJour, puRegional } from "./calc";
+import { montantLigne, dqeTotals, retenueGarantie, situationNet, paieJour, puRegional, mensualite } from "./calc";
 
 describe("montantLigne", () => {
   it("quantité × PU", () => expect(montantLigne({ unite: "m³", quantite: 120, prixUnitaire: 8500 })).toBe(1020000));
@@ -50,4 +50,9 @@ describe("paieJour", () => {
 
 describe("puRegional", () => {
   it("Douala ×1.06", () => expect(puRegional(95000, 1.06)).toBe(100700));
+});
+
+describe("mensualite", () => {
+  it("taux 0 = principal / mois", () => expect(mensualite(1200000, 0, 12)).toBe(100000));
+  it("prêt 10M à 8% sur 60 mois", () => expect(mensualite(10000000, 8, 60)).toBe(202764));
 });

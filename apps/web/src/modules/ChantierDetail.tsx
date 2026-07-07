@@ -1,23 +1,38 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, CheckCircle2, Circle, ListChecks, Flag } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Circle, ListChecks, Flag, ClipboardCheck, Image as ImageIcon } from "lucide-react";
 import { C, FONTS, Card, Progress } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Tache = { id: string; nom: string; lot: string; pct: number };
 type Jalon = { id: string; libelle: string; valide: boolean; valideLe: string | null };
+type Reserve = { id: string; description: string; localisation: string | null; statut: string };
+type Media = { id: string; nom: string; url: string };
+
+const TABS = [
+  { id: "chantier", label: "Tâches & jalons", icon: ListChecks },
+  { id: "reserves", label: "Réserves", icon: ClipboardCheck },
+  { id: "medias", label: "Plans / Photos", icon: ImageIcon },
+];
 
 export default function ChantierDetail({ chantier, onBack }: { chantier: { id: string; nom: string }; onBack: () => void }) {
+  const [tab, setTab] = useState("chantier");
   const [taches, setTaches] = useState<Tache[]>([]);
   const [jalons, setJalons] = useState<Jalon[]>([]);
+  const [reserves, setReserves] = useState<Reserve[]>([]);
+  const [medias, setMedias] = useState<Media[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [ft, setFt] = useState({ nom: "", lot: "Gros œuvre", pct: "0" });
   const [fj, setFj] = useState("");
 
   async function load() {
-    const [t, j] = await Promise.all([
+    const [t, j, r, m] = await Promise.all([
       supabase.from("taches").select("id,nom,lot,pct").eq("chantierId", chantier.id).order("lot"),
       supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("libelle"),
+      supabase.from("reserves").select("id,description,localisation,statut").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
+      supabase.from("medias").select("id,nom,url").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
     ]);
+    setReserves((r.data as Reserve[]) ?? []);
+    setMedias((m.data as Media[]) ?? []);
     if (t.error) setErr(t.error.message); else setTaches((t.data as Tache[]) ?? []);
     setJalons((j.data as Jalon[]) ?? []);
   }
@@ -56,6 +71,39 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: { id: s
       </div>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
 
+      <div style={{ display: "flex", gap: 6, borderBottom: `1px solid ${C.line}` }}>
+        {TABS.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", borderBottom: tab === t.id ? `3px solid ${C.orange}` : "3px solid transparent", padding: "8px 14px", cursor: "pointer", color: tab === t.id ? C.steel : C.steelSoft, fontWeight: tab === t.id ? 700 : 500, fontSize: 14, fontFamily: FONTS.sans }}>
+            <t.icon size={16} /> {t.label}{t.id === "reserves" && reserves.length ? ` (${reserves.filter((r) => r.statut === "Ouverte").length})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}
+          </button>
+        ))}
+      </div>
+
+      {tab === "reserves" && (
+        <div style={{ display: "grid", gap: 8 }}>
+          {reserves.map((r) => (
+            <Card key={r.id} style={{ borderLeft: `4px solid ${r.statut === "Levée" ? C.green : C.red}`, display: "flex", justifyContent: "space-between" }}>
+              <div><div style={{ fontWeight: 600, color: C.steel }}>{r.description}</div><div style={{ fontSize: 12, color: C.steelSoft }}>{r.localisation ?? ""}</div></div>
+              <span style={{ color: r.statut === "Levée" ? C.green : C.red, fontWeight: 700, fontSize: 12 }}>{r.statut}</span>
+            </Card>
+          ))}
+          {reserves.length === 0 && <div style={{ color: C.steelSoft }}>Aucune réserve. Gérer dans Opérations → Réserves.</div>}
+        </div>
+      )}
+
+      {tab === "medias" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: 12 }}>
+          {medias.map((m) => (
+            <Card key={m.id} style={{ padding: 0, overflow: "hidden" }}>
+              <img src={m.url} alt={m.nom} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+              <div style={{ padding: 8, fontSize: 12, color: C.steel }}>{m.nom}</div>
+            </Card>
+          ))}
+          {medias.length === 0 && <div style={{ color: C.steelSoft }}>Aucun plan/photo. Ajouter dans Opérations → Plans / Photos.</div>}
+        </div>
+      )}
+
+      {tab === "chantier" && (
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
         <Card>
           <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", color: C.steel, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}><ListChecks size={18} color={C.orange} /> Tâches</div>
@@ -96,6 +144,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: { id: s
           </div>
         </Card>
       </div>
+      )}
     </div>
   );
 }
