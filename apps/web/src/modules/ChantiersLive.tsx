@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { HardHat, Plus, Trash2, MapPin, ListChecks } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, Progress, fcfa } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, Progress, Hazard, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import ChantierDetail from "./ChantierDetail";
 
@@ -22,9 +22,10 @@ type Chantier = {
   budget: number;
   consomme: number;
   avancementReel: number;
+  avancementPrevu: number;
 };
 
-const SELECT = "id,nom,client,ville,statut,budget,consomme,avancementReel";
+const SELECT = "id,nom,client,ville,statut,budget,consomme,avancementReel,avancementPrevu";
 
 export default function ChantiersLive() {
   const [rows, setRows] = useState<Chantier[]>([]);
@@ -113,32 +114,42 @@ export default function ChantiersLive() {
       {loading && <div style={{ color: C.steelSoft }}>Chargement…</div>}
       {!loading && rows.length === 0 && !err && <div style={{ color: C.steelSoft }}>Aucun chantier. Ajoutez-en un ci-dessus.</div>}
 
+      {rows.length > 0 && <SectionTitle icon={HardHat}>Chantiers ({rows.length})</SectionTitle>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
         {rows.map((c) => {
-          const pct = c.budget ? Math.round((c.consomme / c.budget) * 100) : 0;
+          const budgetPct = c.budget ? Math.round((c.consomme / c.budget) * 100) : 0;
+          const enRetard = c.avancementReel < c.avancementPrevu - 5;
+          const barColor = c.statut === "EN_RETARD" || enRetard ? C.red : c.statut === "TERMINE" ? C.green : C.orange;
           return (
-            <Card key={c.id}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: C.steel, display: "flex", alignItems: "center", gap: 8 }}>
-                  <HardHat size={18} color={C.orange} /> {c.nom}
+            <Card key={c.id} style={{ padding: 0, overflow: "hidden" }}>
+              <Hazard />
+              <div style={{ padding: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <div style={{ fontFamily: FONTS.condensed, fontSize: 21, fontWeight: 700, textTransform: "uppercase", color: C.steel, lineHeight: 1.15 }}>{c.nom}</div>
+                  <StatutBadge s={STATUT_LABEL[c.statut] ?? c.statut} />
                 </div>
-                <StatutBadge s={STATUT_LABEL[c.statut] ?? c.statut} />
-              </div>
-              <div style={{ color: C.steelSoft, fontSize: 13, marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                {c.client} · <MapPin size={13} /> {c.ville}
-              </div>
-              <div style={{ marginTop: 14, fontSize: 12, color: C.steelSoft, display: "flex", justifyContent: "space-between" }}>
-                <span>Budget consommé</span><span>{pct} %</span>
-              </div>
-              <div style={{ marginTop: 4 }}><Progress pct={pct} color={pct > 90 ? C.red : C.orange} /></div>
-              <div style={{ marginTop: 8, fontSize: 13, color: C.steel }}>{fcfa(c.consomme)} / {fcfa(c.budget)}</div>
-              <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
-                <button onClick={() => setOpen(c)} title="Tâches & jalons" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: C.orange, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <ListChecks size={14} /> Tâches & jalons
-                </button>
-                <button onClick={() => remove(c.id)} title="Supprimer" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: C.red, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <Trash2 size={14} /> Supprimer
-                </button>
+                <div style={{ color: C.steelSoft, fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={13} /> {c.ville}</span>
+                  <span>{c.client}</span>
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.steelSoft, marginBottom: 4 }}>
+                    <span>Avancement réel / prévu</span>
+                    <b style={{ color: enRetard ? C.red : C.steel }}>{c.avancementReel} % <span style={{ color: C.steelSoft, fontWeight: 400 }}>/ {c.avancementPrevu} %</span></b>
+                  </div>
+                  <Progress pct={c.avancementReel} color={barColor} />
+                </div>
+                <div style={{ marginTop: 10, fontSize: 12, color: C.steelSoft }}>
+                  Budget : <b style={{ color: budgetPct > 90 ? C.red : C.steel }}>{fcfa(c.consomme)}</b> / {fcfa(c.budget)} ({budgetPct} %)
+                </div>
+                <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
+                  <button onClick={() => setOpen(c)} title="Ouvrir le chantier" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: C.orange, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                    <ListChecks size={14} /> Ouvrir
+                  </button>
+                  <button onClick={() => remove(c.id)} title="Supprimer" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: C.red, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                    <Trash2 size={14} /> Supprimer
+                  </button>
+                </div>
               </div>
             </Card>
           );

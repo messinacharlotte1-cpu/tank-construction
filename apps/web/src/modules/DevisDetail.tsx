@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Plus, Trash2, FileCheck, Printer, Server } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, fcfa, TVA_DEFAULT } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, Hazard, Kpi, fcfa, TVA_DEFAULT } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { printDocument, serverPdf, fcfaP, type PdfBlock } from "../lib/pdf";
 import { montantLigne as calcMontant, dqeTotals } from "../lib/calc";
@@ -141,6 +141,24 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
         </div>
       </div>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
+
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <Hazard />
+        <div style={{ padding: 20 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+            <div>
+              <h2 style={{ margin: 0, fontFamily: FONTS.condensed, fontSize: 24, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>Devis quantitatif et estimatif — {numero}</h2>
+              <div style={{ fontSize: 13, color: C.steelSoft, marginTop: 4 }}>{client}</div>
+            </div>
+            <StatutBadge s={statut} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 16, marginTop: 16 }}>
+            <Kpi label="Total HT après remise" value={fcfa(htNet)} />
+            <Kpi label={`TTC (TVA ${(TVA_DEFAULT * 100).toLocaleString("fr-FR")} %)`} value={fcfa(ttc)} color={C.orange} />
+            <Kpi label="Ratio au m²" value={surface > 0 ? `${fcfa(Math.round(ttc / surface))}/m²` : "—"} sub={surface > 0 ? `${surface} m²` : "Renseigner la surface ci-dessous"} />
+          </div>
+        </div>
+      </Card>
 
       {lots.map((lot) => {
         const sos = sous.filter((s) => s.lotId === lot.id);

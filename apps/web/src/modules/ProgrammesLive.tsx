@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Plus, ArrowLeft, Building2, MapPin, Trash2 } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, fcfa } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, Hazard, Kpi, Progress, fcfa } from "@tank/ui";
+
+// Seuil de pré-commercialisation exigé par la banque pour débloquer le crédit promoteur.
+const SEUIL_PRECO = 50;
 import { supabase, getTenant } from "../lib/supabase";
 
 type Programme = { id: string; nom: string; ville: string };
@@ -98,14 +101,39 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   const vendus = lots.filter((l) => l.statut === "VENDU").length;
   const reserves = lots.filter((l) => l.statut === "RESERVE").length;
+  const dispos = lots.length - vendus - reserves;
+  const caTotal = lots.reduce((s, l) => s + Number(l.prix), 0);
+  const caSecurise = lots.filter((l) => l.statut !== "DISPONIBLE").reduce((s, l) => s + Number(l.prix), 0);
+  const precoPct = lots.length ? Math.round(((vendus + reserves) / lots.length) * 100) : 0;
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: C.steel }}><ArrowLeft size={15} /> Programmes</button>
-        <div style={{ fontWeight: 700, color: C.steel }}>{programme.nom} — {lots.length} lots · {vendus} vendus · {reserves} réservés</div>
-      </div>
+    <div style={{ display: "grid", gap: 20 }}>
+      <button onClick={onBack} style={{ justifySelf: "start", display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: C.steel }}><ArrowLeft size={15} /> Retour aux programmes</button>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
+
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <Hazard />
+        <div style={{ padding: 20 }}>
+          <h2 style={{ margin: 0, fontFamily: FONTS.condensed, fontSize: 28, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{programme.nom}</h2>
+          <div style={{ fontSize: 13, color: C.steelSoft, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}><MapPin size={14} /> {programme.ville} · {lots.length} lots</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginTop: 16 }}>
+            <Kpi label="Vendus" value={vendus} color={C.green} />
+            <Kpi label="Réservés" value={reserves} color={C.amber} />
+            <Kpi label="Disponibles" value={dispos} />
+            <Kpi label="CA sécurisé / potentiel" value={<>{Math.round(caSecurise / 1e6)} M <span style={{ fontSize: 14, color: C.steelSoft }}>/ {Math.round(caTotal / 1e6)} M</span></>} color={C.orange} />
+          </div>
+          {lots.length > 0 && (
+            <div style={{ marginTop: 16, maxWidth: 420 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.steelSoft, marginBottom: 4 }}>
+                <span>Pré-commercialisation</span>
+                <b style={{ color: precoPct >= SEUIL_PRECO ? C.green : C.amber }}>{precoPct} %</b>
+              </div>
+              <Progress pct={precoPct} color={precoPct >= SEUIL_PRECO ? C.green : C.amber} />
+              <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 4 }}>Seuil bancaire de déblocage : {SEUIL_PRECO} % {precoPct >= SEUIL_PRECO ? "✓ atteint" : "— à atteindre"}</div>
+            </div>
+          )}
+        </div>
+      </Card>
       <Card>
         <form onSubmit={addLot} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1.4fr auto", gap: 10 }}>
           <input style={input} placeholder="Référence (L-A101)" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} required />

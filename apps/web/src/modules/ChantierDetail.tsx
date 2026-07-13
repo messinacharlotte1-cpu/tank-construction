@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, CheckCircle2, Circle, ListChecks, Flag, ClipboardCheck, Image as ImageIcon } from "lucide-react";
-import { C, FONTS, Card, Progress } from "@tank/ui";
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Circle, ListChecks, Flag, ClipboardCheck, Image as ImageIcon, MapPin, Users } from "lucide-react";
+import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Tache = { id: string; nom: string; lot: string; pct: number };
@@ -14,7 +14,16 @@ const TABS = [
   { id: "medias", label: "Plans / Photos", icon: ImageIcon },
 ];
 
-export default function ChantierDetail({ chantier, onBack }: { chantier: { id: string; nom: string }; onBack: () => void }) {
+const STATUT_LABEL: Record<string, string> = {
+  EN_PREPARATION: "En préparation", EN_COURS: "En cours", EN_RETARD: "En retard", SUSPENDU: "Suspendu", TERMINE: "Terminé",
+};
+
+type ChantierHead = {
+  id: string; nom: string; client?: string; ville?: string; statut?: string;
+  budget?: number; consomme?: number; avancementReel?: number; avancementPrevu?: number;
+};
+
+export default function ChantierDetail({ chantier, onBack }: { chantier: ChantierHead; onBack: () => void }) {
   const [tab, setTab] = useState("chantier");
   const [taches, setTaches] = useState<Tache[]>([]);
   const [jalons, setJalons] = useState<Jalon[]>([]);
@@ -62,19 +71,41 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: { id: s
 
   const inp: React.CSSProperties = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   const avg = taches.length ? Math.round(taches.reduce((s, t) => s + Number(t.pct), 0) / taches.length) : 0;
+  const budget = Number(chantier.budget ?? 0), consomme = Number(chantier.consomme ?? 0);
+  const budgetPct = budget ? Math.round((consomme / budget) * 100) : 0;
+  const aReel = Number(chantier.avancementReel ?? avg), aPrevu = Number(chantier.avancementPrevu ?? 0);
+  const enRetard = aReel < aPrevu - 5;
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: C.steel }}><ArrowLeft size={15} /> Chantiers</button>
-        <div style={{ fontWeight: 700, color: C.steel }}>{chantier.nom} — avancement moyen tâches : {avg}%</div>
-      </div>
+    <div style={{ display: "grid", gap: 20 }}>
+      <button onClick={onBack} style={{ justifySelf: "start", display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: C.steel }}><ArrowLeft size={15} /> Retour aux chantiers</button>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
 
-      <div style={{ display: "flex", gap: 6, borderBottom: `1px solid ${C.line}` }}>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <Hazard />
+        <div style={{ padding: 20 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+            <div>
+              <h2 style={{ margin: 0, fontFamily: FONTS.condensed, fontSize: 28, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{chantier.nom}</h2>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6, fontSize: 13, color: C.steelSoft }}>
+                {chantier.client && <span style={{ display: "flex", alignItems: "center", gap: 5 }}><Users size={14} /> {chantier.client}</span>}
+                {chantier.ville && <span style={{ display: "flex", alignItems: "center", gap: 5 }}><MapPin size={14} /> {chantier.ville}</span>}
+              </div>
+            </div>
+            {chantier.statut && <StatutBadge s={STATUT_LABEL[chantier.statut] ?? chantier.statut} />}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginTop: 16 }}>
+            <Kpi label="Avancement réel / prévu" value={<>{aReel} % <span style={{ fontSize: 15, color: C.steelSoft }}>/ {aPrevu} %</span></>} color={enRetard ? C.red : C.green} pct={aReel} pctColor={enRetard ? C.red : C.green} />
+            {budget > 0 && <Kpi label="Budget consommé" value={`${budgetPct} %`} color={budgetPct > 90 ? C.red : C.steel} sub={`${fcfa(consomme)} / ${fcfa(budget)}`} />}
+            <Kpi label="Avancement moyen tâches" value={`${avg} %`} sub={`${taches.length} tâche${taches.length > 1 ? "s" : ""}`} />
+          </div>
+        </div>
+      </Card>
+
+      <div style={{ display: "flex", gap: 6, borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", borderBottom: tab === t.id ? `3px solid ${C.orange}` : "3px solid transparent", padding: "8px 14px", cursor: "pointer", color: tab === t.id ? C.steel : C.steelSoft, fontWeight: tab === t.id ? 700 : 500, fontSize: 14, fontFamily: FONTS.sans }}>
-            <t.icon size={16} /> {t.label}{t.id === "reserves" && reserves.length ? ` (${reserves.filter((r) => r.statut === "Ouverte").length})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", borderBottom: tab === t.id ? `3px solid ${C.orange}` : "3px solid transparent", padding: "8px 14px", cursor: "pointer", color: tab === t.id ? C.orange : C.steelSoft, fontWeight: 700, fontSize: 13.5, fontFamily: FONTS.sans }}>
+            <t.icon size={16} /> {t.label}{t.id === "reserves" && reserves.length ? ` (${reserves.filter((r) => r.statut !== "Levée").length})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}
           </button>
         ))}
       </div>

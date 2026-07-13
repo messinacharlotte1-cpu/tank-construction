@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { UserCircle, Home, ArrowLeft, Printer } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { C, FONTS, Card, Kpi, Hazard, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
 import { mensualite } from "../lib/calc";
@@ -51,15 +51,32 @@ export default function PortailAcquereur() {
           <button onClick={() => printDocument(`Echeancier-${sel.acquereur}`, echeancierHtml)} style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}><Printer size={15} /> Échéancier PDF</button>
         </div>
 
-        <Card>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ background: C.orangeSoft, borderRadius: 10, padding: 8 }}><Home size={20} color={C.orange} /></div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 17, color: C.steel }}>{sel.acquereur}</div>
-              <div style={{ color: C.steelSoft, fontSize: 13 }}>{lot?.programmes?.nom} — {lot?.programmes?.ville}</div>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <Hazard />
+          <div style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ background: C.orangeSoft, borderRadius: 10, padding: 8 }}><Home size={20} color={C.orange} /></div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 17, color: C.steel }}>{sel.acquereur}</div>
+                <div style={{ color: C.steelSoft, fontSize: 13 }}>{lot?.programmes?.nom} — {lot?.programmes?.ville}</div>
+              </div>
             </div>
+            {lot && <div style={{ fontSize: 14, color: C.steel }}>Lot <b>{lot.reference}</b> · {lot.typologie} · {lot.surface ?? "—"} m² · {fcfa(Number(lot.prix))}</div>}
+            {(() => {
+              const prixLot = lot ? Number(lot.prix) : 0;
+              const encaisse = appels.filter((a) => a.statut === "PAYE").reduce((s, a) => s + Number(a.montant), 0);
+              const reste = Math.max(0, prixLot - encaisse);
+              const pct = prixLot ? Math.round((encaisse / prixLot) * 100) : 0;
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginTop: 16 }}>
+                  <Kpi label="Prix du lot" value={fcfa(prixLot)} />
+                  <Kpi label="Appelé (échéancier)" value={fcfa(totalAppels)} sub={`${appels.length} appel${appels.length > 1 ? "s" : ""}`} />
+                  <Kpi label="Encaissé" value={`${pct} %`} color={C.green} pct={pct} pctColor={C.green} sub={fcfa(encaisse)} />
+                  <Kpi label="Reste à payer" value={fcfa(reste)} color={C.orange} />
+                </div>
+              );
+            })()}
           </div>
-          {lot && <div style={{ fontSize: 14, color: C.steel }}>Lot <b>{lot.reference}</b> · {lot.typologie} · {lot.surface ?? "—"} m² · {fcfa(Number(lot.prix))}</div>}
         </Card>
 
         <Card style={{ padding: 0, overflow: "hidden" }}>

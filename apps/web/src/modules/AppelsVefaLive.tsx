@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Send, Lock } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { Plus, Trash2, Send, Lock, Landmark, HardHat } from "lucide-react";
+import { C, FONTS, Card, Kpi, Banner, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Appel = {
@@ -61,8 +61,25 @@ export default function AppelsVefaLive() {
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
 
+  const totalAppele = rows.reduce((s, a) => s + Number(a.montant), 0);
+  const emis = rows.filter((a) => a.statut === "EMIS" || a.statut === "PAYE").reduce((s, a) => s + Number(a.montant), 0);
+  const encaisse = rows.filter((a) => a.statut === "PAYE").reduce((s, a) => s + Number(a.montant), 0);
+  const emisPct = totalAppele ? Math.round((emis / totalAppele) * 100) : 0;
+
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Landmark}>VEFA &amp; appels de fonds</SectionTitle>
+
+      <Banner tone="success" icon={HardHat}>
+        <b>Le chantier pilote la trésorerie :</b> un appel de fonds n'est émissible que si son jalon chantier est validé (constat contradictoire). L'émission notifie l'acquéreur (échéancier + lien de paiement).
+      </Banner>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 }}>
+        <Card style={{ padding: 16 }}><Kpi label="Total appelé" value={fcfa(totalAppele)} sub={`${rows.length} appel${rows.length > 1 ? "s" : ""}`} /></Card>
+        <Card style={{ padding: 16 }}><Kpi label="Émis (échéancier)" value={`${emisPct} %`} color={C.amber} pct={emisPct} pctColor={C.amber} sub={fcfa(emis)} /></Card>
+        <Card style={{ padding: 16 }}><Kpi label="Encaissé (payé)" value={fcfa(encaisse)} color={C.green} /></Card>
+      </div>
+
       <Card>
         <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={18} color={C.orange} /> Nouvel appel de fonds
@@ -88,8 +105,8 @@ export default function AppelsVefaLive() {
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
-              <th style={{ padding: 12 }}>Libellé</th><th style={{ padding: 12 }}>Acquéreur</th><th style={{ padding: 12 }}>Jalon</th><th style={{ padding: 12 }}>Montant</th><th style={{ padding: 12 }}>Échéance</th><th style={{ padding: 12 }}>Statut</th><th></th>
+            <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>
+              {["Libellé", "Acquéreur", "Jalon", "Montant", "Échéance", "Statut"].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, fontSize: 13 }}>{h}</th>)}<th></th>
             </tr></thead>
             <tbody>
               {rows.map((a) => {
