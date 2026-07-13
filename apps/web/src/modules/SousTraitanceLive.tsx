@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { Plus, Trash2, Gavel, Banknote } from "lucide-react";
+import { C, FONTS, Card, SectionTitle, fcfa } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Row = { id: string; nom: string; corpsEtat: string; chantier: string | null; montantMarche: number; retenueGarantiePct: number };
@@ -28,8 +28,14 @@ export default function SousTraitanceLive() {
   async function del(id: string) { const { error } = await supabase.from("sous_traitants").delete().eq("id", id); if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id)); }
 
   const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
+  const totalRetenues = rows.reduce((s, r) => s + Math.round(Number(r.montantMarche) * Number(r.retenueGarantiePct) / 100), 0);
+
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Gavel}>Sous-traitance &amp; contrats</SectionTitle>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.amberSoft, padding: "8px 12px", borderRadius: 8, fontSize: 13, color: C.steel }}>
+        <Banknote size={16} color={C.amber} /> Retenues de garantie en cours : <b>{fcfa(totalRetenues)}</b> — libération à réception définitive (12 mois).
+      </div>
       <Card>
         <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr 1.4fr 1.2fr 0.8fr auto", gap: 10 }}>
           <input style={inp} placeholder="Nom sous-traitant" value={f.nom} onChange={(e) => setF({ ...f, nom: e.target.value })} required />
@@ -42,24 +48,23 @@ export default function SousTraitanceLive() {
       </Card>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}><th style={{ padding: 12 }}>Sous-traitant</th><th style={{ padding: 12 }}>Corps d'état</th><th style={{ padding: 12 }}>Chantier</th><th style={{ padding: 12 }}>Marché</th><th style={{ padding: 12 }}>Retenue garantie</th><th></th></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} style={{ borderTop: `1px solid ${C.line}` }}>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{r.nom}</td>
-                  <td style={{ padding: 12 }}>{r.corpsEtat}</td>
-                  <td style={{ padding: 12 }}>{r.chantier ?? "—"}</td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>{fcfa(Number(r.montantMarche))}</td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>{r.retenueGarantiePct} % · <b>{fcfa(Math.round(Number(r.montantMarche) * Number(r.retenueGarantiePct) / 100))}</b></td>
-                  <td style={{ padding: 12, textAlign: "right" }}><button onClick={() => del(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button></td>
-                </tr>
-              ))}
-              {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 16, color: C.steelSoft }}>Aucun sous-traitant.</td></tr>}
-            </tbody>
-          </table>
-        </Card>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+          {rows.map((r) => (
+            <Card key={r.id} style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{r.nom}</div>
+                <button onClick={() => del(r.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, padding: 0 }}><Trash2 size={15} /></button>
+              </div>
+              <div style={{ fontSize: 13, color: C.steelSoft, marginTop: 2 }}>{r.corpsEtat}{r.chantier ? ` · ${r.chantier}` : ""}</div>
+              <div style={{ marginTop: 12, fontSize: 13 }}>Montant marché : <b>{fcfa(Number(r.montantMarche))}</b></div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 12, color: C.steelSoft }}>
+                <span>Retenue garantie : <b style={{ color: C.steel }}>{r.retenueGarantiePct} %</b></span>
+                <span>Séquestrée : <b style={{ color: C.orange }}>{fcfa(Math.round(Number(r.montantMarche) * Number(r.retenueGarantiePct) / 100))}</b></span>
+              </div>
+            </Card>
+          ))}
+          {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucun sous-traitant.</div>}
+        </div>
       )}
     </div>
   );

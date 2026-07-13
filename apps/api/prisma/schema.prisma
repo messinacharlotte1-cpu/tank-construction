@@ -344,6 +344,7 @@ model Fournisseur {
   categorie String? // Matériaux, Location, Services…
   contact   String?
   telephone String?
+  note      Int      @default(0) // évaluation 0..5 (étoiles)
   createdAt DateTime @default(now())
 
   @@index([tenantId])

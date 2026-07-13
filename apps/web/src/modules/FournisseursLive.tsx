@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Phone } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { Plus, Trash2, Phone, Truck, Star } from "lucide-react";
+import { C, FONTS, Card, SectionTitle } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
-type Row = { id: string; nom: string; categorie: string | null; contact: string | null; telephone: string | null };
+type Row = { id: string; nom: string; categorie: string | null; contact: string | null; telephone: string | null; note: number };
 const CATS = ["Matériaux", "Location", "Services", "Transport", "Autre"];
 
 export default function FournisseursLive() {
@@ -15,7 +15,7 @@ export default function FournisseursLive() {
 
   async function load() {
     setLoading(true); setTid(await getTenant());
-    const { data, error } = await supabase.from("fournisseurs").select("id,nom,categorie,contact,telephone").order("nom");
+    const { data, error } = await supabase.from("fournisseurs").select("id,nom,categorie,contact,telephone,note").order("nom");
     if (error) setErr(error.message); else setRows((data as Row[]) ?? []);
     setLoading(false);
   }
@@ -27,10 +27,12 @@ export default function FournisseursLive() {
     setF({ nom: "", categorie: "Matériaux", contact: "", telephone: "" }); void load();
   }
   async function del(id: string) { const { error } = await supabase.from("fournisseurs").delete().eq("id", id); if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id)); }
+  async function setNote(r: Row, note: number) { setRows((x) => x.map((y) => y.id === r.id ? { ...y, note } : y)); await supabase.from("fournisseurs").update({ note }).eq("id", r.id); }
 
   const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Truck}>Fournisseurs &amp; sous-traitants</SectionTitle>
       <Card>
         <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 1.4fr 1.4fr auto", gap: 10 }}>
           <input style={inp} placeholder="Nom fournisseur" value={f.nom} onChange={(e) => setF({ ...f, nom: e.target.value })} required />
@@ -42,23 +44,29 @@ export default function FournisseursLive() {
       </Card>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}><th style={{ padding: 12 }}>Nom</th><th style={{ padding: 12 }}>Catégorie</th><th style={{ padding: 12 }}>Contact</th><th style={{ padding: 12 }}>Téléphone</th><th></th></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} style={{ borderTop: `1px solid ${C.line}` }}>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{r.nom}</td>
-                  <td style={{ padding: 12 }}>{r.categorie}</td>
-                  <td style={{ padding: 12 }}>{r.contact ?? "—"}</td>
-                  <td style={{ padding: 12, display: "flex", alignItems: "center", gap: 6 }}>{r.telephone && <Phone size={13} color={C.steelSoft} />}{r.telephone ?? "—"}</td>
-                  <td style={{ padding: 12, textAlign: "right" }}><button onClick={() => del(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button></td>
-                </tr>
-              ))}
-              {rows.length === 0 && <tr><td colSpan={5} style={{ padding: 16, color: C.steelSoft }}>Aucun fournisseur.</td></tr>}
-            </tbody>
-          </table>
-        </Card>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+          {rows.map((r) => (
+            <Card key={r.id} style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ fontFamily: FONTS.condensed, fontSize: 19, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{r.nom}</div>
+                <button onClick={() => del(r.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, padding: 0 }}><Trash2 size={15} /></button>
+              </div>
+              <div style={{ fontSize: 13, color: C.steelSoft }}>{[r.categorie, r.contact].filter(Boolean).join(" · ")}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 8 }}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <button key={i} onClick={() => setNote(r, i)} title={`Noter ${i}/5`} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}>
+                    <Star size={16} fill={i <= r.note ? C.orange : "none"} color={i <= r.note ? C.orange : C.line} />
+                  </button>
+                ))}
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.steel, marginLeft: 4 }}>{r.note ? r.note.toFixed(1) : "—"}</span>
+              </div>
+              <div style={{ marginTop: 12, fontSize: 13, color: C.steelSoft, display: "flex", alignItems: "center", gap: 6 }}>
+                {r.telephone ? <><Phone size={13} /> {r.telephone}</> : "Pas de téléphone"}
+              </div>
+            </Card>
+          ))}
+          {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucun fournisseur.</div>}
+        </div>
       )}
     </div>
   );
