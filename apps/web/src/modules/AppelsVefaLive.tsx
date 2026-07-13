@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Send, Lock, Landmark, HardHat } from "lucide-react";
-import { C, FONTS, Card, Kpi, Banner, SectionTitle, fcfa } from "@tank/ui";
+import { Plus, Trash2, Send, Lock, Landmark, HardHat, Users } from "lucide-react";
+import { C, FONTS, Card, Kpi, Banner, SectionTitle, Progress, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Appel = {
-  id: string; libelle: string; montant: number; echeance: string | null; statut: string;
+  id: string; reservationId: string; libelle: string; montant: number; echeance: string | null; statut: string;
   reservation: { acquereur: string } | null;
   jalon: { libelle: string; valide: boolean } | null;
 };
-type Resa = { id: string; acquereur: string; lots_immo: { reference: string } | null };
+type Resa = { id: string; acquereur: string; lots_immo: { reference: string; prix: number } | null };
 type Jalon = { id: string; libelle: string };
 
 const STATUT: Record<string, [string, string]> = {
   PREVU: ["Prévu", C.amber], EMIS: ["Émis", C.green], PAYE: ["Payé", C.steelSoft],
 };
 
-const APPEL_SELECT = "id,libelle,montant,echeance,statut,reservation:reservations(acquereur),jalon:jalons(libelle,valide)";
+const APPEL_SELECT = "id,reservationId,libelle,montant,echeance,statut,reservation:reservations(acquereur),jalon:jalons(libelle,valide)";
 
 export default function AppelsVefaLive() {
   const [rows, setRows] = useState<Appel[]>([]);
@@ -29,7 +29,7 @@ export default function AppelsVefaLive() {
     setLoading(true);
     const [a, r, j] = await Promise.all([
       supabase.from("appels_de_fonds").select(APPEL_SELECT).order("echeance"),
-      supabase.from("reservations").select("id,acquereur,lots_immo(reference)"),
+      supabase.from("reservations").select("id,acquereur,lots_immo(reference,prix)"),
       supabase.from("jalons").select("id,libelle").eq("valide", true),
     ]);
     if (a.error) setErr(a.error.message); else setRows((a.data as unknown as Appel[]) ?? []);
@@ -62,9 +62,16 @@ export default function AppelsVefaLive() {
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
 
   const totalAppele = rows.reduce((s, a) => s + Number(a.montant), 0);
-  const emis = rows.filter((a) => a.statut === "EMIS" || a.statut === "PAYE").reduce((s, a) => s + Number(a.montant), 0);
   const encaisse = rows.filter((a) => a.statut === "PAYE").reduce((s, a) => s + Number(a.montant), 0);
-  const emisPct = totalAppele ? Math.round((emis / totalAppele) * 100) : 0;
+  const encaissePct = totalAppele ? Math.round((encaisse / totalAppele) * 100) : 0;
+  // Dépôt de garantie séquestré = 2 % du prix de chaque lot réservé (compte séquestre notaire).
+  const depots = resas.reduce((s, r) => s + Math.round(Number(r.lots_immo?.prix ?? 0) * 0.02), 0);
+
+  // Réservations : cumul encaissé par acquéreur (via appels PAYE rattachés).
+  const encaisseParResa = new Map<string, number>();
+  for (const a of rows) if (a.statut === "PAYE") encaisseParResa.set(a.reservationId, (encaisseParResa.get(a.reservationId) ?? 0) + Number(a.montant));
+  const prochainParResa = new Map<string, Appel>();
+  for (const a of rows) if ((a.statut === "EMIS" || a.statut === "PREVU") && !prochainParResa.has(a.reservationId)) prochainParResa.set(a.reservationId, a);
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -76,8 +83,8 @@ export default function AppelsVefaLive() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 }}>
         <Card style={{ padding: 16 }}><Kpi label="Total appelé" value={fcfa(totalAppele)} sub={`${rows.length} appel${rows.length > 1 ? "s" : ""}`} /></Card>
-        <Card style={{ padding: 16 }}><Kpi label="Émis (échéancier)" value={`${emisPct} %`} color={C.amber} pct={emisPct} pctColor={C.amber} sub={fcfa(emis)} /></Card>
-        <Card style={{ padding: 16 }}><Kpi label="Encaissé (payé)" value={fcfa(encaisse)} color={C.green} /></Card>
+        <Card style={{ padding: 16 }}><Kpi label="Avancement encaissé" value={`${encaissePct} %`} color={C.green} pct={encaissePct} pctColor={C.green} sub={fcfa(encaisse)} /></Card>
+        <Card style={{ padding: 16 }}><Kpi label="Dépôts de garantie séquestrés" value={fcfa(depots)} color={C.orange} sub="Compte séquestre notaire — 2 %" /></Card>
       </div>
 
       <Card>
@@ -134,6 +141,37 @@ export default function AppelsVefaLive() {
               {rows.length === 0 && <tr><td colSpan={7} style={{ padding: 16, color: C.steelSoft }}>Aucun appel de fonds.</td></tr>}
             </tbody>
           </table>
+        </Card>
+      )}
+
+      {resas.length > 0 && (
+        <Card>
+          <SectionTitle icon={Users}>Réservations</SectionTitle>
+          <div style={{ display: "grid", gap: 10 }}>
+            {resas.map((r) => {
+              const prix = Number(r.lots_immo?.prix ?? 0);
+              const enc = encaisseParResa.get(r.id) ?? 0;
+              const pct = prix ? Math.round((enc / prix) * 100) : 0;
+              const proch = prochainParResa.get(r.id);
+              return (
+                <div key={r.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, display: "grid", gap: 6 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
+                    <div>
+                      <b style={{ fontSize: 14, color: C.steel }}>{r.acquereur}</b>
+                      <span style={{ fontSize: 12, color: C.steelSoft }}>{r.lots_immo ? ` · Lot ${r.lots_immo.reference} · ${fcfa(prix)}` : ""}</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: C.steelSoft }}>{proch ? `Prochain : ${proch.libelle}` : "Échéancier soldé"}</span>
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.steelSoft, marginBottom: 3 }}>
+                      <span>Encaissé : <b style={{ color: C.green }}>{fcfa(enc)}</b> ({pct} %)</span>
+                    </div>
+                    <Progress pct={pct} color={C.green} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </Card>
       )}
     </div>
