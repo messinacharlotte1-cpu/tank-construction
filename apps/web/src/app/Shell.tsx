@@ -3,9 +3,9 @@ import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings, Wallet,
   Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck, ChevronDown, ChevronRight,
-  Search, X,
+  Search, X, Bell,
 } from "lucide-react";
-import { C, FONTS } from "@tank/ui";
+import { C, FONTS, Hazard } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import Dashboard from "../modules/Dashboard";
 import ChantiersLive from "../modules/ChantiersLive";
@@ -85,11 +85,23 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
   const [page, setPage] = useState("dashboard");
   const [q, setQ] = useState("");
   const [hover, setHover] = useState("");
+  const [alerts, setAlerts] = useState(0);
   // Sections repliées par défaut ; seule la section de la page courante est ouverte.
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["Pilotage"]));
 
   useEffect(() => {
     supabase.rpc("current_role").then(({ data }) => setRole((data as string) ?? ""));
+    // Compteur d'alertes réel (chantiers en retard, factures impayées, stock bas, incidents ouverts).
+    (async () => {
+      const [ch, fa, inc, art] = await Promise.all([
+        supabase.from("chantiers").select("id", { count: "exact", head: true }).eq("statut", "EN_RETARD"),
+        supabase.from("factures").select("id", { count: "exact", head: true }).eq("statut", "Impayée"),
+        supabase.from("incidents").select("id", { count: "exact", head: true }).eq("statut", "En cours"),
+        supabase.from("articles").select("stock,seuil"),
+      ]);
+      const bas = (art.data ?? []).filter((a) => Number(a.stock) < Number(a.seuil)).length;
+      setAlerts((ch.count ?? 0) + (fa.count ?? 0) + (inc.count ?? 0) + bas);
+    })();
   }, []);
 
   const visible = PAGES.filter((p) => !p.roles || role === "SUPER_ADMIN" || p.roles.includes(role));
@@ -106,13 +118,19 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
   const query = q.trim().toLowerCase();
   const matches = query ? visible.filter((p) => p.label.toLowerCase().includes(query)) : [];
 
+  const initials = (email ?? "?").replace(/@.*/, "").split(/[.\-_]/).map((s) => s[0]?.toUpperCase() ?? "").join("").slice(0, 2) || "?";
+  const dateStr = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+
   return (
     <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "220px 1fr", background: C.concrete }}>
       <aside style={{ background: C.steel, color: C.white, display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${C.steelMid}` }}>
-          <div style={{ background: C.orange, borderRadius: 8, padding: 6 }}><HardHat size={18} color={C.white} /></div>
-          <span style={{ fontFamily: FONTS.condensed, fontWeight: 700, fontSize: 18, textTransform: "uppercase", letterSpacing: 1 }}>Tank</span>
+        <div style={{ padding: "22px 20px 14px" }}>
+          <div style={{ fontFamily: FONTS.condensed, fontSize: 24, fontWeight: 700, letterSpacing: 1, lineHeight: 1 }}>
+            TANK<span style={{ color: C.orange }}>•</span>CONSTRUCTION
+          </div>
+          <div style={{ fontSize: 11, color: "#8FA0B2", marginTop: 4, letterSpacing: 0.5 }}>Gestion BTP — Cameroun</div>
         </div>
+        <Hazard />
         <div style={{ padding: "10px 10px 4px" }}>
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <Search size={15} color="#7B8A99" style={{ position: "absolute", left: 10, pointerEvents: "none" }} />
@@ -144,14 +162,15 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
                     onClick={() => { goto(p.id); setQ(""); }}
                     onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover("")}
                     style={{
-                      width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
-                      border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
-                      background: active ? C.orange : hot ? C.steelMid : "transparent", color: C.white, fontWeight: active ? 700 : 500,
+                      width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "9px 13px", borderRadius: 8,
+                      border: "none", borderLeft: `3px solid ${active ? C.orange : "transparent"}`, cursor: "pointer", textAlign: "left",
+                      fontSize: 13.5, fontFamily: FONTS.sans,
+                      background: active || hot ? C.steelMid : "transparent", color: active ? C.white : "#B7C3CF", fontWeight: 600,
                       transition: "background .12s",
                     }}
                   >
                     <p.icon size={17} /> {p.label}
-                    <span style={{ marginLeft: "auto", fontSize: 10, color: active ? "rgba(255,255,255,.75)" : "#7B8A99", textTransform: "uppercase", letterSpacing: 0.5 }}>{p.group}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 10, color: "#6E8093", textTransform: "uppercase", letterSpacing: 0.5 }}>{p.group}</span>
                   </button>
                 );
               })
@@ -183,10 +202,10 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
                         onClick={() => setPage(p.id)}
                         onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover("")}
                         style={{
-                          width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
-                          border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
-                          borderLeft: active ? `3px solid ${C.white}` : "3px solid transparent",
-                          background: active ? C.orange : hot ? C.steelMid : "transparent", color: C.white, fontWeight: active ? 700 : 500,
+                          width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "9px 13px", borderRadius: 8,
+                          border: "none", cursor: "pointer", textAlign: "left", fontSize: 13.5, fontFamily: FONTS.sans,
+                          borderLeft: `3px solid ${active ? C.orange : "transparent"}`,
+                          background: active || hot ? C.steelMid : "transparent", color: active ? C.white : "#B7C3CF", fontWeight: 600,
                           transition: "background .12s",
                         }}
                       >
@@ -199,26 +218,43 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
             })
           )}
         </nav>
-        <div style={{ padding: 10, borderTop: `1px solid ${C.steelMid}`, display: "grid", gap: 6 }}>
-          <button onClick={onShowProto} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: `1px solid ${C.steelSoft}`, color: C.white, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 13, fontFamily: FONTS.sans }}>
-            <Eye size={15} /> Maquette
-          </button>
-          <div style={{ fontSize: 11, color: "#8FA0AF", padding: "2px 4px" }}>{email}{role ? ` · ${role}` : ""}</div>
-          <button onClick={() => supabase.auth.signOut()} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: `1px solid ${C.steelSoft}`, color: C.white, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 13, fontFamily: FONTS.sans }}>
-            <LogOut size={15} /> Déconnexion
-          </button>
+        <div style={{ padding: "12px 14px", borderTop: `1px solid ${C.steelMid}`, display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.orange, display: "grid", placeItems: "center", fontWeight: 700, color: C.white, fontSize: 13, flexShrink: 0 }}>{initials}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: C.white, fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
+              <div style={{ fontSize: 11, color: "#8FA0B2" }}>{role || "—"}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={onShowProto} title="Voir la maquette" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${C.steelSoft}`, color: "#B7C3CF", borderRadius: 8, padding: "7px 8px", cursor: "pointer", fontSize: 12, fontFamily: FONTS.sans }}>
+              <Eye size={14} /> Maquette
+            </button>
+            <button onClick={() => supabase.auth.signOut()} title="Se déconnecter" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${C.steelSoft}`, color: "#B7C3CF", borderRadius: 8, padding: "7px 8px", cursor: "pointer", fontSize: 12, fontFamily: FONTS.sans }}>
+              <LogOut size={14} /> Quitter
+            </button>
+          </div>
         </div>
       </aside>
 
-      <main style={{ padding: 24, overflow: "auto" }}>
-        {current && (
-          <>
-            <h1 style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, margin: "0 0 20px" }}>
-              <current.icon size={24} color={C.orange} /> {current.label}
-            </h1>
-            {current.render(goto)}
-          </>
-        )}
+      <main style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto" }}>
+        <header style={{ background: C.white, borderBottom: `1px solid ${C.line}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 30 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: FONTS.condensed, fontSize: 20, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel }}>
+            {current && <current.icon size={20} color={C.orange} />} {current?.label}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <button onClick={() => goto("dashboard")} title="Alertes" style={{ position: "relative", background: "none", border: "none", cursor: "pointer", display: "flex", padding: 2 }}>
+              <Bell size={20} color={C.steelSoft} />
+              {alerts > 0 && (
+                <span style={{ position: "absolute", top: -6, right: -7, background: C.red, color: C.white, fontSize: 10, fontWeight: 700, borderRadius: 999, padding: "1px 5px" }}>{alerts}</span>
+              )}
+            </button>
+            <span style={{ fontSize: 12, color: C.steelSoft, textTransform: "capitalize" }}>{dateStr}</span>
+          </div>
+        </header>
+        <div style={{ padding: 24, maxWidth: 1180, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+          {current && current.render(goto)}
+        </div>
       </main>
     </div>
   );
