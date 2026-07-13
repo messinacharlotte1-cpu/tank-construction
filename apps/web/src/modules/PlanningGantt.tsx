@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { C, FONTS, Card } from "@tank/ui";
+import { Calendar } from "lucide-react";
+import { C, FONTS, Card, SectionTitle } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Ch = { id: string; nom: string };
 type Tache = { id: string; nom: string; lot: string; pct: number; debut: string | null; duree: number | null; dependance: string | null };
 
 const DAY = 864e5;
+// Palette pour colorer les barres par lot de travaux.
+const PALETTE = ["#F26B1D", "#1F9D55", "#3B82C4", "#8B5CF6", "#E9A100", "#D64541", "#0EA5A5", "#46586B"];
 
 export default function PlanningGantt() {
   const [chantiers, setChantiers] = useState<Ch[]>([]);
@@ -39,16 +42,21 @@ export default function PlanningGantt() {
   const min = starts.length ? Math.min(...starts) : Date.now();
   const max = ends.length ? Math.max(...ends) : min + 30 * DAY;
   const span = Math.max(max - min, DAY);
+  const chNom = chantiers.find((c) => c.id === cid)?.nom ?? "";
+  const lots = [...new Set(taches.map((t) => t.lot))];
+  const lotColor = (lot: string) => PALETTE[Math.max(0, lots.indexOf(lot)) % PALETTE.length];
+  const now = Date.now();
+  const todayLeft = ((now - min) / span) * 100;
+  const todayIn = now >= min && now <= max;
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <Card>
-        <label style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft }}>Chantier</label>
-        <select style={{ ...inp, marginTop: 6, width: "100%", maxWidth: 400 }} value={cid} onChange={(e) => setCid(e.target.value)}>
+    <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Calendar} action={
+        <select style={{ ...inp, minWidth: 220 }} value={cid} onChange={(e) => setCid(e.target.value)}>
           {chantiers.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
         </select>
-        <div style={{ fontSize: 12, color: C.steelSoft, marginTop: 8 }}>Renseignez début + durée pour placer les barres. Dépendance = nom de la tâche précédente.</div>
-      </Card>
+      }>Planning Gantt{chNom ? ` — ${chNom}` : ""}</SectionTitle>
+      <div style={{ fontSize: 12, color: C.steelSoft }}>Renseignez début + durée pour placer les barres. Remplissage = avancement réel. Dépendance = nom de la tâche précédente.</div>
 
       <Card style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -66,7 +74,8 @@ export default function PlanningGantt() {
                   <td style={{ padding: 6, width: 120 }}><input style={inp} placeholder="—" value={t.dependance ?? ""} onChange={(e) => save(t, { dependance: e.target.value || null })} /></td>
                   <td style={{ padding: 6 }}>
                     <div style={{ position: "relative", height: 22, background: C.concrete, borderRadius: 6 }}>
-                      {has && <div style={{ position: "absolute", left: `${left}%`, width: `${width}%`, height: "100%", background: Number(t.pct) >= 100 ? C.green : C.orange, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${t.pct}%`, height: "100%", background: "rgba(0,0,0,.18)" }} /></div>}
+                      {todayIn && <div style={{ position: "absolute", left: `${todayLeft}%`, top: 0, bottom: 0, width: 2, background: C.red, zIndex: 2 }} />}
+                      {has && <div title={`${t.pct} %`} style={{ position: "absolute", left: `${left}%`, width: `${width}%`, height: "100%", background: `${lotColor(t.lot)}33`, border: `1px solid ${lotColor(t.lot)}`, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${t.pct}%`, height: "100%", background: lotColor(t.lot) }} /></div>}
                     </div>
                   </td>
                 </tr>
@@ -77,6 +86,14 @@ export default function PlanningGantt() {
         </table>
         {dated.length > 0 && <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 8 }}>Échelle : {new Date(min).toLocaleDateString("fr-FR")} → {new Date(max).toLocaleDateString("fr-FR")}</div>}
       </Card>
+      {lots.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: C.steelSoft }}>
+          {lots.map((l) => (
+            <span key={l}><span style={{ display: "inline-block", width: 10, height: 10, background: lotColor(l), borderRadius: 3, marginRight: 4 }} />{l}</span>
+          ))}
+          <span><span style={{ display: "inline-block", width: 2, height: 12, background: C.red, marginRight: 4, verticalAlign: -2 }} />Aujourd'hui</span>
+        </div>
+      )}
     </div>
   );
 }

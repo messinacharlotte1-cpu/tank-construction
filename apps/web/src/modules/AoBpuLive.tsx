@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Upload, Scale } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { Plus, Trash2, Upload, Scale, FileText } from "lucide-react";
+import { C, FONTS, Card, SectionTitle, fcfa } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Bpu = { id: string; code: string; designation: string; unite: string; puBase: number; categorie: string | null };
@@ -34,7 +34,8 @@ export default function AoBpuLive() {
   const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   return (
     <div style={{ display: "grid", gap: 20 }}>
-      <Card style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+      <SectionTitle icon={FileText}>Appels d'offres &amp; bibliothèque de prix</SectionTitle>
+      <Card style={{ borderLeft: `4px solid ${C.orange}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Scale size={16} color={C.orange} /><b style={{ color: C.steel }}>Coefficient régional</b></div>
         <select style={inp} value={region} onChange={(e) => setRegion(e.target.value)}>{Object.keys(COEF_REGION).map((r) => <option key={r}>{r}</option>)}</select>
         <span style={{ color: C.steelSoft, fontSize: 13 }}>× {coef} (base Yaoundé)</span>
@@ -54,10 +55,10 @@ export default function AoBpuLive() {
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}><th style={{ padding: 12 }}>Code</th><th style={{ padding: 12 }}>Désignation</th><th style={{ padding: 12 }}>Unité</th><th style={{ padding: 12 }}>PU base</th><th style={{ padding: 12 }}>PU {region}</th><th></th></tr></thead>
+            <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>{["Code", "Désignation", "Unité", "PU base", `PU ${region}`].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, fontSize: 13 }}>{h}</th>)}<th></th></tr></thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} style={{ borderTop: `1px solid ${C.line}` }}>
+              {rows.map((r, i) => (
+                <tr key={r.id} style={{ borderTop: `1px solid ${C.line}`, background: i % 2 ? "#FAFBFC" : C.white }}>
                   <td style={{ padding: 12, fontWeight: 600 }}>{r.code}</td>
                   <td style={{ padding: 12 }}>{r.designation}<div style={{ fontSize: 11, color: C.steelSoft }}>{r.categorie}</div></td>
                   <td style={{ padding: 12 }}>{r.unite}</td>
