@@ -3,6 +3,7 @@ import {
   HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings, Wallet,
   Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck, ChevronDown, ChevronRight,
+  Search, X,
 } from "lucide-react";
 import { C, FONTS } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -82,6 +83,8 @@ const PAGES: Page[] = [
 export default function Shell({ email, onShowProto }: { email?: string; onShowProto: () => void }) {
   const [role, setRole] = useState<string>("");
   const [page, setPage] = useState("dashboard");
+  const [q, setQ] = useState("");
+  const [hover, setHover] = useState("");
   // Sections repliées par défaut ; seule la section de la page courante est ouverte.
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["Pilotage"]));
 
@@ -92,6 +95,16 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
   const visible = PAGES.filter((p) => !p.roles || role === "SUPER_ADMIN" || p.roles.includes(role));
   const current = visible.find((p) => p.id === page) ?? visible[0];
   const toggleGroup = (g: string) => setOpenGroups((s) => { const n = new Set(s); n.has(g) ? n.delete(g) : n.add(g); return n; });
+  // Navigue + ouvre la section cible (utile après une recherche ou un lien inter-module).
+  const goto = (id: string) => {
+    setPage(id);
+    const g = PAGES.find((p) => p.id === id)?.group;
+    if (g) setOpenGroups((s) => new Set(s).add(g));
+  };
+
+  // Recherche : filtre par libellé. Résultats aplatis, sans sections repliables.
+  const query = q.trim().toLowerCase();
+  const matches = query ? visible.filter((p) => p.label.toLowerCase().includes(query)) : [];
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "220px 1fr", background: C.concrete }}>
@@ -100,38 +113,91 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
           <div style={{ background: C.orange, borderRadius: 8, padding: 6 }}><HardHat size={18} color={C.white} /></div>
           <span style={{ fontFamily: FONTS.condensed, fontWeight: 700, fontSize: 18, textTransform: "uppercase", letterSpacing: 1 }}>Tank</span>
         </div>
+        <div style={{ padding: "10px 10px 4px" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={15} color="#7B8A99" style={{ position: "absolute", left: 10, pointerEvents: "none" }} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") setQ(""); if (e.key === "Enter" && matches[0]) { goto(matches[0].id); setQ(""); } }}
+              placeholder="Rechercher un module…"
+              style={{ width: "100%", boxSizing: "border-box", padding: "8px 30px 8px 32px", borderRadius: 8, border: `1px solid ${C.steelMid}`, background: C.steelMid, color: C.white, fontSize: 13, fontFamily: FONTS.sans, outline: "none" }}
+            />
+            {q && (
+              <button onClick={() => setQ("")} title="Effacer" style={{ position: "absolute", right: 6, background: "none", border: "none", cursor: "pointer", color: "#7B8A99", display: "flex", padding: 4 }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
         <nav style={{ padding: 10, display: "grid", gap: 2, flex: 1, overflow: "auto" }}>
-          {GROUPS.filter((g) => visible.some((p) => p.group === g)).map((g) => {
-            const opened = openGroups.has(g);
-            const hasActive = current?.group === g;
-            return (
-              <div key={g}>
-                <button
-                  onClick={() => toggleGroup(g)}
-                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 6px", background: "transparent", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: hasActive ? C.orange : "#7B8A99" }}
-                >
-                  <span>{g}</span>
-                  {opened ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-                {opened && visible.filter((p) => p.group === g).map((p) => {
-                  const active = current && p.id === current.id;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => setPage(p.id)}
-                      style={{
-                        width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
-                        border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
-                        background: active ? C.orange : "transparent", color: C.white, fontWeight: active ? 700 : 500,
-                      }}
-                    >
-                      <p.icon size={17} /> {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+          {query ? (
+            matches.length === 0 ? (
+              <div style={{ padding: "12px", fontSize: 13, color: "#7B8A99" }}>Aucun module « {q} ».</div>
+            ) : (
+              matches.map((p) => {
+                const active = current && p.id === current.id;
+                const hot = hover === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => { goto(p.id); setQ(""); }}
+                    onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover("")}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
+                      border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
+                      background: active ? C.orange : hot ? C.steelMid : "transparent", color: C.white, fontWeight: active ? 700 : 500,
+                      transition: "background .12s",
+                    }}
+                  >
+                    <p.icon size={17} /> {p.label}
+                    <span style={{ marginLeft: "auto", fontSize: 10, color: active ? "rgba(255,255,255,.75)" : "#7B8A99", textTransform: "uppercase", letterSpacing: 0.5 }}>{p.group}</span>
+                  </button>
+                );
+              })
+            )
+          ) : (
+            GROUPS.filter((g) => visible.some((p) => p.group === g)).map((g) => {
+              const opened = openGroups.has(g);
+              const hasActive = current?.group === g;
+              const count = visible.filter((p) => p.group === g).length;
+              return (
+                <div key={g}>
+                  <button
+                    onClick={() => toggleGroup(g)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 6px", background: "transparent", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: hasActive ? C.orange : "#7B8A99" }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {g}
+                      <span style={{ fontSize: 9, fontWeight: 700, color: hasActive ? C.orange : "#5F6E7D", background: hasActive ? "rgba(242,107,29,.15)" : "rgba(255,255,255,.06)", borderRadius: 10, padding: "1px 6px", letterSpacing: 0 }}>{count}</span>
+                      {!opened && hasActive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.orange }} />}
+                    </span>
+                    {opened ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
+                  {opened && visible.filter((p) => p.group === g).map((p) => {
+                    const active = current && p.id === current.id;
+                    const hot = hover === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setPage(p.id)}
+                        onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover("")}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8,
+                          border: "none", cursor: "pointer", textAlign: "left", fontSize: 14, fontFamily: FONTS.sans,
+                          borderLeft: active ? `3px solid ${C.white}` : "3px solid transparent",
+                          background: active ? C.orange : hot ? C.steelMid : "transparent", color: C.white, fontWeight: active ? 700 : 500,
+                          transition: "background .12s",
+                        }}
+                      >
+                        <p.icon size={17} /> {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })
+          )}
         </nav>
         <div style={{ padding: 10, borderTop: `1px solid ${C.steelMid}`, display: "grid", gap: 6 }}>
           <button onClick={onShowProto} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: `1px solid ${C.steelSoft}`, color: C.white, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 13, fontFamily: FONTS.sans }}>
@@ -150,7 +216,7 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
             <h1 style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, margin: "0 0 20px" }}>
               <current.icon size={24} color={C.orange} /> {current.label}
             </h1>
-            {current.render(setPage)}
+            {current.render(goto)}
           </>
         )}
       </main>
