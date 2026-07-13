@@ -99,9 +99,26 @@ model Chantier {
   taches    Tache[]
   jalons    Jalon[]
   pointages Pointage[]
+  journal   JournalChantier[]
 
   @@index([tenantId])
   @@map("chantiers")
+}
+
+// Journal de chantier — rapports terrain (saisis offline, météo horodatée = justificatif contractuel).
+model JournalChantier {
+  id         String   @id @default(uuid())
+  chantierId String
+  chantier   Chantier @relation(fields: [chantierId], references: [id])
+  date       DateTime @default(now())
+  auteur     String
+  meteo      String?
+  texte      String
+  photos     Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([chantierId, date])
+  @@map("journal_chantier")
 }
 
 model Tache {

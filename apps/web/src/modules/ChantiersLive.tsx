@@ -23,9 +23,11 @@ type Chantier = {
   consomme: number;
   avancementReel: number;
   avancementPrevu: number;
+  debut: string | null;
+  fin: string | null;
 };
 
-const SELECT = "id,nom,client,ville,statut,budget,consomme,avancementReel,avancementPrevu";
+const SELECT = "id,nom,client,ville,statut,budget,consomme,avancementReel,avancementPrevu,debut,fin";
 
 export default function ChantiersLive() {
   const [rows, setRows] = useState<Chantier[]>([]);

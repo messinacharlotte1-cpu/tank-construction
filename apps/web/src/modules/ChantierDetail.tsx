@@ -1,18 +1,14 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, CheckCircle2, Circle, ListChecks, Flag, ClipboardCheck, Image as ImageIcon, MapPin, Users } from "lucide-react";
-import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, fcfa } from "@tank/ui";
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, ClipboardCheck, Camera, CloudSun, WifiOff } from "lucide-react";
+import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, SectionTitle, miniLabel, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Tache = { id: string; nom: string; lot: string; pct: number };
 type Jalon = { id: string; libelle: string; valide: boolean; valideLe: string | null };
 type Reserve = { id: string; description: string; localisation: string | null; statut: string };
 type Media = { id: string; nom: string; url: string };
-
-const TABS = [
-  { id: "chantier", label: "Tâches & jalons", icon: ListChecks },
-  { id: "reserves", label: "Réserves", icon: ClipboardCheck },
-  { id: "medias", label: "Plans / Photos", icon: ImageIcon },
-];
+type Journal = { id: string; date: string; auteur: string; meteo: string | null; texte: string; photos: number };
+type Pt = { ouvrier: string; statut: string };
 
 const STATUT_LABEL: Record<string, string> = {
   EN_PREPARATION: "En préparation", EN_COURS: "En cours", EN_RETARD: "En retard", SUSPENDU: "Suspendu", TERMINE: "Terminé",
@@ -21,29 +17,48 @@ const STATUT_LABEL: Record<string, string> = {
 type ChantierHead = {
   id: string; nom: string; client?: string; ville?: string; statut?: string;
   budget?: number; consomme?: number; avancementReel?: number; avancementPrevu?: number;
+  debut?: string | null; fin?: string | null;
 };
 
+const TABS = [
+  { id: "apercu", label: "Vue d'ensemble" },
+  { id: "taches", label: "Tâches" },
+  { id: "medias", label: "Plans & Photos" },
+  { id: "reserves", label: "Réserves & OPR" },
+  { id: "journal", label: "Journal de chantier" },
+];
+
+const fdate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("fr-FR") : "—");
+
 export default function ChantierDetail({ chantier, onBack }: { chantier: ChantierHead; onBack: () => void }) {
-  const [tab, setTab] = useState("chantier");
+  const [tab, setTab] = useState("apercu");
   const [taches, setTaches] = useState<Tache[]>([]);
   const [jalons, setJalons] = useState<Jalon[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [medias, setMedias] = useState<Media[]>([]);
+  const [journal, setJournal] = useState<Journal[]>([]);
+  const [equipe, setEquipe] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [ft, setFt] = useState({ nom: "", lot: "Gros œuvre", pct: "0" });
   const [fj, setFj] = useState("");
+  const [fjr, setFjr] = useState({ auteur: "", meteo: "", texte: "" });
 
   async function load() {
-    const [t, j, r, m] = await Promise.all([
+    const [t, j, r, m, jr, pts] = await Promise.all([
       supabase.from("taches").select("id,nom,lot,pct").eq("chantierId", chantier.id).order("lot"),
-      supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("libelle"),
+      supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("valideLe", { nullsFirst: false }),
       supabase.from("reserves").select("id,description,localisation,statut").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
       supabase.from("medias").select("id,nom,url").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
+      supabase.from("journal_chantier").select("id,date,auteur,meteo,texte,photos").eq("chantierId", chantier.id).order("date", { ascending: false }),
+      supabase.from("pointages").select("ouvrier,statut").eq("chantierId", chantier.id),
     ]);
-    setReserves((r.data as Reserve[]) ?? []);
-    setMedias((m.data as Media[]) ?? []);
     if (t.error) setErr(t.error.message); else setTaches((t.data as Tache[]) ?? []);
     setJalons((j.data as Jalon[]) ?? []);
+    setReserves((r.data as Reserve[]) ?? []);
+    setMedias((m.data as Media[]) ?? []);
+    setJournal((jr.data as Journal[]) ?? []);
+    const noms = [...new Set(((pts.data as Pt[]) ?? []).filter((p) => p.statut !== "A").map((p) => p.ouvrier))];
+    setEquipe(noms);
   }
   useEffect(() => { void load(); }, [chantier.id]);
 
@@ -69,12 +84,21 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
   }
   async function delJalon(id: string) { await supabase.from("jalons").delete().eq("id", id); setJalons((r) => r.filter((x) => x.id !== id)); }
 
+  async function addJournal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fjr.texte.trim()) return;
+    const { error } = await supabase.from("journal_chantier").insert({ id: crypto.randomUUID(), chantierId: chantier.id, auteur: fjr.auteur || "Terrain", meteo: fjr.meteo || null, texte: fjr.texte, photos: 0 });
+    if (error) return setErr(error.message);
+    setFjr({ auteur: "", meteo: "", texte: "" }); void load();
+  }
+
   const inp: React.CSSProperties = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   const avg = taches.length ? Math.round(taches.reduce((s, t) => s + Number(t.pct), 0) / taches.length) : 0;
   const budget = Number(chantier.budget ?? 0), consomme = Number(chantier.consomme ?? 0);
   const budgetPct = budget ? Math.round((consomme / budget) * 100) : 0;
   const aReel = Number(chantier.avancementReel ?? avg), aPrevu = Number(chantier.avancementPrevu ?? 0);
   const enRetard = aReel < aPrevu - 5;
+  const reservesOuvertes = reserves.filter((r) => r.statut !== "Levée").length;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -86,95 +110,156 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
         <div style={{ padding: 20 }}>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
             <div>
-              <h2 style={{ margin: 0, fontFamily: FONTS.condensed, fontSize: 28, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{chantier.nom}</h2>
+              <h2 style={{ margin: 0, fontFamily: FONTS.condensed, fontSize: 30, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{chantier.nom}</h2>
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6, fontSize: 13, color: C.steelSoft }}>
                 {chantier.client && <span style={{ display: "flex", alignItems: "center", gap: 5 }}><Users size={14} /> {chantier.client}</span>}
                 {chantier.ville && <span style={{ display: "flex", alignItems: "center", gap: 5 }}><MapPin size={14} /> {chantier.ville}</span>}
+                {(chantier.debut || chantier.fin) && <span style={{ display: "flex", alignItems: "center", gap: 5 }}><Calendar size={14} /> {fdate(chantier.debut)} → {fdate(chantier.fin)}</span>}
               </div>
             </div>
             {chantier.statut && <StatutBadge s={STATUT_LABEL[chantier.statut] ?? chantier.statut} />}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginTop: 16 }}>
-            <Kpi label="Avancement réel / prévu" value={<>{aReel} % <span style={{ fontSize: 15, color: C.steelSoft }}>/ {aPrevu} %</span></>} color={enRetard ? C.red : C.green} pct={aReel} pctColor={enRetard ? C.red : C.green} />
-            {budget > 0 && <Kpi label="Budget consommé" value={`${budgetPct} %`} color={budgetPct > 90 ? C.red : C.steel} sub={`${fcfa(consomme)} / ${fcfa(budget)}`} />}
-            <Kpi label="Avancement moyen tâches" value={`${avg} %`} sub={`${taches.length} tâche${taches.length > 1 ? "s" : ""}`} />
+          <div style={{ display: "flex", gap: 4, marginTop: 16, borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
+            {TABS.map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONTS.sans, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, color: tab === t.id ? C.orange : C.steelSoft, borderBottom: `3px solid ${tab === t.id ? C.orange : "transparent"}` }}>
+                {t.label}{t.id === "reserves" && reservesOuvertes ? ` (${reservesOuvertes})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}
+              </button>
+            ))}
           </div>
         </div>
       </Card>
 
-      <div style={{ display: "flex", gap: 6, borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", borderBottom: tab === t.id ? `3px solid ${C.orange}` : "3px solid transparent", padding: "8px 14px", cursor: "pointer", color: tab === t.id ? C.orange : C.steelSoft, fontWeight: 700, fontSize: 13.5, fontFamily: FONTS.sans }}>
-            <t.icon size={16} /> {t.label}{t.id === "reserves" && reserves.length ? ` (${reserves.filter((r) => r.statut !== "Levée").length})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}
-          </button>
-        ))}
-      </div>
-
-      {tab === "reserves" && (
-        <div style={{ display: "grid", gap: 8 }}>
-          {reserves.map((r) => (
-            <Card key={r.id} style={{ borderLeft: `4px solid ${r.statut === "Levée" ? C.green : C.red}`, display: "flex", justifyContent: "space-between" }}>
-              <div><div style={{ fontWeight: 600, color: C.steel }}>{r.description}</div><div style={{ fontSize: 12, color: C.steelSoft }}>{r.localisation ?? ""}</div></div>
-              <span style={{ color: r.statut === "Levée" ? C.green : C.red, fontWeight: 700, fontSize: 12 }}>{r.statut}</span>
+      {tab === "apercu" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+            <Card style={{ padding: 16 }}>
+              <div style={miniLabel}>Avancement réel vs prévu</div>
+              <div style={{ fontFamily: FONTS.condensed, fontSize: 30, fontWeight: 700, color: enRetard ? C.red : C.green }}>{aReel} % <span style={{ fontSize: 16, color: C.steelSoft }}>/ {aPrevu} %</span></div>
+              <Progress pct={aReel} color={enRetard ? C.red : C.green} />
             </Card>
-          ))}
-          {reserves.length === 0 && <div style={{ color: C.steelSoft }}>Aucune réserve. Gérer dans Opérations → Réserves.</div>}
-        </div>
+            <Card style={{ padding: 16 }}>
+              <div style={miniLabel}>Budget consommé</div>
+              <div style={{ fontFamily: FONTS.condensed, fontSize: 30, fontWeight: 700, color: budgetPct > 90 ? C.red : C.steel }}>{budgetPct} %</div>
+              <div style={{ fontSize: 12, color: C.steelSoft }}>{fcfa(consomme)} / {fcfa(budget)}</div>
+            </Card>
+            <Card style={{ padding: 16 }}>
+              <div style={miniLabel}>Équipe affectée</div>
+              <div style={{ fontFamily: FONTS.condensed, fontSize: 30, fontWeight: 700, color: C.steel }}>{equipe.length}</div>
+              <div style={{ fontSize: 12, color: C.steelSoft }}>{equipe.map((e) => e.split(" ")[0]).join(", ") || "Aucun pointage"}</div>
+            </Card>
+          </div>
+          <Card>
+            <SectionTitle icon={Calendar}>Jalons du chantier</SectionTitle>
+            <form onSubmit={addJalon} style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <input style={{ ...inp, flex: 1 }} placeholder="Nouveau jalon" value={fj} onChange={(e) => setFj(e.target.value)} required />
+              <button type="submit" style={{ padding: "8px 12px", border: "none", borderRadius: 8, background: C.orange, color: C.white, cursor: "pointer" }}><Plus size={15} /></button>
+            </form>
+            <div style={{ fontSize: 11, color: C.steelSoft, marginBottom: 10 }}>Un jalon validé (constat contradictoire) débloque l'appel de fonds VEFA.</div>
+            <div style={{ display: "grid", gap: 0 }}>
+              {jalons.map((j, i) => (
+                <div key={j.id} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <button onClick={() => toggleJalon(j)} title="Valider / invalider" style={{ width: 22, height: 22, borderRadius: "50%", background: j.valide ? C.green : C.concrete, border: `2px solid ${j.valide ? C.green : C.line}`, display: "grid", placeItems: "center", cursor: "pointer", padding: 0 }}>
+                      {j.valide && <CheckCircle2 size={14} color={C.white} />}
+                    </button>
+                    {i < jalons.length - 1 && <div style={{ width: 2, height: 26, background: C.line }} />}
+                  </div>
+                  <div style={{ paddingBottom: 12, flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: j.valide ? C.steelSoft : C.steel, textDecoration: j.valide ? "line-through" : "none" }}>{j.libelle}</div>
+                    <div style={{ fontSize: 12, color: C.steelSoft }}>{j.valide && j.valideLe ? `validé le ${fdate(j.valideLe)}` : "à venir"}</div>
+                  </div>
+                  <button onClick={() => delJalon(j.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={14} /></button>
+                </div>
+              ))}
+              {jalons.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun jalon.</div>}
+            </div>
+          </Card>
+        </>
       )}
 
-      {tab === "medias" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: 12 }}>
-          {medias.map((m) => (
-            <Card key={m.id} style={{ padding: 0, overflow: "hidden" }}>
-              <img src={m.url} alt={m.nom} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
-              <div style={{ padding: 8, fontSize: 12, color: C.steel }}>{m.nom}</div>
-            </Card>
-          ))}
-          {medias.length === 0 && <div style={{ color: C.steelSoft }}>Aucun plan/photo. Ajouter dans Opérations → Plans / Photos.</div>}
-        </div>
-      )}
-
-      {tab === "chantier" && (
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+      {tab === "taches" && (
         <Card>
-          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", color: C.steel, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}><ListChecks size={18} color={C.orange} /> Tâches</div>
-          <form onSubmit={addTache} style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 0.7fr auto", gap: 8, marginBottom: 12 }}>
+          <SectionTitle icon={ClipboardCheck}>Tâches et lots de travaux</SectionTitle>
+          <form onSubmit={addTache} style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 0.7fr auto", gap: 8, marginBottom: 14 }}>
             <input style={inp} placeholder="Tâche" value={ft.nom} onChange={(e) => setFt({ ...ft, nom: e.target.value })} required />
             <input style={inp} placeholder="Lot" value={ft.lot} onChange={(e) => setFt({ ...ft, lot: e.target.value })} />
             <input style={inp} type="number" min="0" max="100" value={ft.pct} onChange={(e) => setFt({ ...ft, pct: e.target.value })} />
             <button type="submit" style={{ padding: "8px 12px", border: "none", borderRadius: 8, background: C.orange, color: C.white, cursor: "pointer" }}><Plus size={15} /></button>
           </form>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 12 }}>
             {taches.map((t) => (
-              <div key={t.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px auto", gap: 10, alignItems: "center" }}>
-                <div><div style={{ fontWeight: 600, color: C.steel, fontSize: 14 }}>{t.nom}</div><div style={{ fontSize: 12, color: C.steelSoft }}>{t.lot}</div><Progress pct={Number(t.pct)} /></div>
+              <div key={t.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 52px auto", gap: 10, alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.steel }}>{t.nom}</div>
+                  <div style={{ fontSize: 12, color: C.steelSoft }}>{t.lot}</div>
+                  <div style={{ marginTop: 6 }}><Progress pct={Number(t.pct)} color={Number(t.pct) === 100 ? C.green : C.orange} /></div>
+                </div>
                 <input style={{ ...inp, padding: "5px 8px" }} type="number" min="0" max="100" value={t.pct} onChange={(e) => setPct(t, Number(e.target.value))} />
+                <div style={{ fontFamily: FONTS.condensed, fontSize: 22, fontWeight: 700, color: C.steel, textAlign: "right" }}>{t.pct} %</div>
                 <button onClick={() => delTache(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={15} /></button>
               </div>
             ))}
             {taches.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucune tâche.</div>}
           </div>
         </Card>
+      )}
 
+      {tab === "medias" && (
         <Card>
-          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", color: C.steel, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}><Flag size={18} color={C.orange} /> Jalons</div>
-          <div style={{ fontSize: 11, color: C.steelSoft, marginBottom: 10 }}>Un jalon validé (constat contradictoire) débloque l'appel de fonds VEFA.</div>
-          <form onSubmit={addJalon} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input style={{ ...inp, flex: 1 }} placeholder="Nouveau jalon" value={fj} onChange={(e) => setFj(e.target.value)} required />
-            <button type="submit" style={{ padding: "8px 12px", border: "none", borderRadius: 8, background: C.orange, color: C.white, cursor: "pointer" }}><Plus size={15} /></button>
-          </form>
-          <div style={{ display: "grid", gap: 8 }}>
-            {jalons.map((j) => (
-              <div key={j.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => toggleJalon(j)} title="Valider / invalider" style={{ background: "none", border: "none", cursor: "pointer", color: j.valide ? C.green : C.steelSoft }}>{j.valide ? <CheckCircle2 size={18} /> : <Circle size={18} />}</button>
-                <div style={{ flex: 1 }}><div style={{ fontSize: 14, color: C.steel, fontWeight: j.valide ? 700 : 400 }}>{j.libelle}</div>{j.valide && j.valideLe && <div style={{ fontSize: 11, color: C.green }}>validé le {new Date(j.valideLe).toLocaleDateString("fr-FR")}</div>}</div>
-                <button onClick={() => delJalon(j.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={14} /></button>
+          <SectionTitle icon={Camera}>Plans & photos</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: 12 }}>
+            {medias.map((m) => (
+              <div key={m.id} style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line}` }}>
+                <img src={m.url} alt={m.nom} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+                <div style={{ padding: 8, fontSize: 12, color: C.steel }}>{m.nom}</div>
               </div>
             ))}
-            {jalons.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun jalon.</div>}
+            {medias.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun plan/photo. Ajouter dans Opérations → Plans / Photos.</div>}
           </div>
         </Card>
-      </div>
+      )}
+
+      {tab === "reserves" && (
+        <Card>
+          <SectionTitle icon={ClipboardCheck}>Réserves & OPR</SectionTitle>
+          <div style={{ display: "grid", gap: 8 }}>
+            {reserves.map((r) => (
+              <div key={r.id} style={{ border: `1px solid ${C.line}`, borderLeft: `4px solid ${r.statut === "Levée" ? C.green : C.red}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <div><div style={{ fontWeight: 600, color: C.steel }}>{r.description}</div><div style={{ fontSize: 12, color: C.steelSoft }}>{r.localisation ?? ""}</div></div>
+                <span style={{ color: r.statut === "Levée" ? C.green : C.red, fontWeight: 700, fontSize: 12, textTransform: "uppercase" }}>{r.statut}</span>
+              </div>
+            ))}
+            {reserves.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucune réserve. Gérer dans Opérations → Réserves.</div>}
+          </div>
+        </Card>
+      )}
+
+      {tab === "journal" && (
+        <Card>
+          <SectionTitle icon={ClipboardCheck}>Journal de chantier (rapports terrain)</SectionTitle>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.amberSoft, padding: "8px 12px", borderRadius: 8, fontSize: 13, color: C.steel, marginBottom: 14 }}>
+            <WifiOff size={16} color={C.amber} /> Saisis hors-ligne sur le terrain, synchronisés à la reconnexion. La météo est journalisée — justificatif contractuel en cas de retard.
+          </div>
+          <form onSubmit={addJournal} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+            <input style={inp} placeholder="Auteur" value={fjr.auteur} onChange={(e) => setFjr({ ...fjr, auteur: e.target.value })} />
+            <input style={inp} placeholder="Météo (ex. Ensoleillé)" value={fjr.meteo} onChange={(e) => setFjr({ ...fjr, meteo: e.target.value })} />
+            <textarea style={{ ...inp, gridColumn: "1 / -1", resize: "vertical", minHeight: 54 }} placeholder="Compte-rendu de la journée…" value={fjr.texte} onChange={(e) => setFjr({ ...fjr, texte: e.target.value })} />
+            <button type="submit" style={{ gridColumn: "1 / -1", justifySelf: "start", padding: "8px 14px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}><Plus size={15} /> Ajouter au journal</button>
+          </form>
+          <div style={{ display: "grid", gap: 10 }}>
+            {journal.map((j) => (
+              <div key={j.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
+                  <b style={{ color: C.steel }}>{fdate(j.date)} — {j.auteur}</b>
+                  {j.meteo && <span style={{ display: "flex", alignItems: "center", gap: 4, color: C.steelSoft }}><CloudSun size={13} /> {j.meteo}</span>}
+                </div>
+                <div style={{ fontSize: 13.5, color: C.steel, marginTop: 6 }}>{j.texte}</div>
+                {j.photos > 0 && <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}><Camera size={12} /> {j.photos} photo{j.photos > 1 ? "s" : ""} géolocalisée{j.photos > 1 ? "s" : ""} et horodatée{j.photos > 1 ? "s" : ""}</div>}
+              </div>
+            ))}
+            {journal.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucune entrée. Ajoutez un rapport ci-dessus.</div>}
+          </div>
+        </Card>
       )}
     </div>
   );
