@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { Plus, Trash2, Users, WifiOff, CheckCircle2, MinusCircle, XCircle } from "lucide-react";
+import { C, FONTS, Card, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { queuePointage, pendingCount, flushPointages } from "../lib/offline";
 import { paieJour, COEF_POINTAGE } from "../lib/calc";
 
 type Chantier = { id: string; nom: string };
 type Pointage = { id: string; ouvrier: string; tarif: number; date: string; statut: string };
-const STATUTS: Record<string, [string, string]> = {
-  P: ["Présent", C.green],
-  DM: ["Demi-journée", C.amber],
-  A: ["Absent", C.red],
+// [libellé, couleur texte, fond pastille, icône]
+const STATUTS: Record<string, [string, string, string, typeof CheckCircle2]> = {
+  P: ["Présent", C.green, C.greenSoft, CheckCircle2],
+  DM: ["Demi-journée", C.amber, C.amberSoft, MinusCircle],
+  A: ["Absent", C.red, C.redSoft, XCircle],
 };
+const CYCLE: Record<string, string> = { P: "DM", DM: "A", A: "P" };
 
 export default function PointageLive() {
   const [chantiers, setChantiers] = useState<Chantier[]>([]);
@@ -83,14 +85,34 @@ export default function PointageLive() {
     const { error } = await supabase.from("pointages").delete().eq("id", id);
     if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
   }
+  // Touchez le statut pour le modifier : Présent → Demi-journée → Absent.
+  async function cycle(p: Pointage) {
+    const next = CYCLE[p.statut] ?? "P";
+    setRows((r) => r.map((x) => (x.id === p.id ? { ...x, statut: next } : x)));
+    await supabase.from("pointages").update({ statut: next }).eq("id", p.id);
+  }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
 
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
   if (chantiers.length === 0) return <div style={{ color: C.steelSoft }}>Aucun chantier — créez-en un d'abord.</div>;
 
+  const presents = rows.filter((p) => p.statut === "P").length + rows.filter((p) => p.statut === "DM").length * 0.5;
+  const cout = paieJour(rows);
+  const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Users} action={
+        <div style={{ fontSize: 13, color: C.steelSoft }}>
+          <b style={{ color: C.steel }}>{presents}/{rows.length}</b> présents · Coût du jour : <b style={{ color: C.orange }}>{fcfa(cout)}</b>
+        </div>
+      }>Pointage journalier — {today}</SectionTitle>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.amberSoft, padding: "8px 12px", borderRadius: 8, fontSize: 13, color: C.steel }}>
+        <WifiOff size={16} color={C.amber} /> Le pointage fonctionne hors-ligne. Touchez le statut pour le modifier (Présent → Demi-journée → Absent).
+      </div>
+
       <Card>
         <label style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft }}>Chantier</label>
         <select style={{ ...input, marginTop: 6, width: "100%" }} value={chantierId} onChange={(e) => setChantierId(e.target.value)}>
@@ -110,29 +132,29 @@ export default function PointageLive() {
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
       {pending > 0 && <Card style={{ borderColor: C.amber, color: "#8a6d00", background: C.amberSoft }}>⚠ {pending} pointage(s) en file hors-ligne — synchronisation automatique à la reconnexion.</Card>}
-      <Card style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ color: C.steelSoft, fontWeight: 600, textTransform: "uppercase", fontSize: 12, letterSpacing: 0.6 }}>Paie du jour (P=1 · DM=0,5 · A=0)</span>
-        <span style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: C.steel }}>{fcfa(paieJour(rows))}</span>
-      </Card>
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
-            <tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
-              <th style={{ padding: 12 }}>Ouvrier</th><th style={{ padding: 12 }}>Date</th><th style={{ padding: 12 }}>Statut</th><th style={{ padding: 12 }}>Tarif</th><th style={{ padding: 12 }}>Paie jour</th><th></th>
+            <tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>
+              {["Ouvrier", "Date", "Tarif/j", "Statut", "Paie du jour"].map((h) => <th key={h} style={{ padding: "10px 14px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, fontSize: 13 }}>{h}</th>)}<th></th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((p) => {
-              const [label, color] = STATUTS[p.statut] ?? [p.statut, C.steelSoft];
+            {rows.map((p, i) => {
+              const [label, fg, bg, Icon] = STATUTS[p.statut] ?? ["?", C.steelSoft, C.concrete, XCircle];
               const paie = Number(p.tarif) * (COEF_POINTAGE[p.statut] ?? 0);
               return (
-                <tr key={p.id} style={{ borderTop: `1px solid ${C.line}` }}>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{p.ouvrier}</td>
-                  <td style={{ padding: 12 }}>{new Date(p.date).toLocaleDateString("fr-FR")}</td>
-                  <td style={{ padding: 12 }}><span style={{ color, fontWeight: 700, fontSize: 13 }}>{label}</span></td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>{fcfa(Number(p.tarif))}</td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap", fontWeight: 600 }}>{fcfa(paie)}</td>
-                  <td style={{ padding: 12, textAlign: "right" }}>
+                <tr key={p.id} style={{ borderTop: `1px solid ${C.line}`, background: i % 2 ? "#FAFBFC" : C.white }}>
+                  <td style={{ padding: "10px 14px", fontWeight: 600, color: C.steel }}>{p.ouvrier}</td>
+                  <td style={{ padding: "10px 14px", color: C.steelSoft }}>{new Date(p.date).toLocaleDateString("fr-FR")}</td>
+                  <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fcfa(Number(p.tarif))}</td>
+                  <td style={{ padding: "8px 14px" }}>
+                    <button onClick={() => cycle(p)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: fg, border: "none", borderRadius: 999, padding: "5px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                      <Icon size={14} /> {label}
+                    </button>
+                  </td>
+                  <td style={{ padding: "10px 14px", whiteSpace: "nowrap", fontWeight: 700, color: paie ? C.steel : C.steelSoft }}>{fcfa(paie)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>
                     <button onClick={() => remove(p.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                   </td>
                 </tr>
