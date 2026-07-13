@@ -62,7 +62,7 @@ const PAGES: Page[] = [
   { id: "ao", label: "AO / BPU", icon: Scale, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL"], render: () => <AoBpuLive /> },
   { id: "situations", label: "Situations", icon: FileText, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <SituationsLive /> },
   { id: "factures", label: "Factures", icon: FileText, group: "Commercial", roles: ["DIRECTION", "COMPTA", "COMMERCIAL"], render: () => <FacturesLive /> },
-  { id: "portail", label: "Portail acquéreur", icon: UserCircle, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL", "ACQUEREUR"], render: () => <PortailAcquereur /> },
+  { id: "portail", label: "Portail acquéreur", icon: UserCircle, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL"], render: () => <PortailAcquereur /> },
   { id: "vitrine", label: "Vitrine", icon: Store, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL"], render: () => <Vitrine embedded /> },
 
   { id: "programmes", label: "Programmes", icon: Landmark, group: "Promotion", roles: ["DIRECTION", "COMMERCIAL"], render: () => <ProgrammesLive /> },

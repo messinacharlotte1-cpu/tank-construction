@@ -50,6 +50,7 @@ enum Role {
   COMMERCIAL
   TERRAIN
   ACQUEREUR
+  MO // Maître d'ouvrage (client BTP d'un chantier) — accès portail scopé
 }
 
 enum AccesMode {
@@ -87,6 +88,7 @@ model Chantier {
   tenant         Tenant         @relation(fields: [tenantId], references: [id])
   nom            String
   client         String
+  userId         String? // compte maître d'ouvrage rattaché (auth.uid) — accès portail scopé
   ville          String
   statut         StatutChantier @default(EN_PREPARATION)
   budget         BigInt // FCFA
@@ -103,6 +105,7 @@ model Chantier {
   journal   JournalChantier[]
 
   @@index([tenantId])
+  @@index([userId])
   @@map("chantiers")
 }
 
