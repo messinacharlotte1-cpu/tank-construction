@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, fcfa } from "@tank/ui";
+import { Plus, Trash2, FileText } from "lucide-react";
+import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Facture = { id: string; numero: string; client: string; ttc: number; statut: string };
@@ -62,6 +62,7 @@ export default function FacturesLive() {
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={FileText}>Facturation</SectionTitle>
       <Card>
         <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={18} color={C.orange} /> Nouvelle facture
@@ -81,18 +82,18 @@ export default function FacturesLive() {
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
-                <th style={{ padding: 12 }}>N°</th><th style={{ padding: 12 }}>Client</th><th style={{ padding: 12 }}>TTC</th><th style={{ padding: 12 }}>Statut</th><th></th>
+              <tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>
+                {["N°", "Client", "Montant TTC", "Statut"].map((h) => <th key={h} style={{ padding: "10px 14px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, fontSize: 13 }}>{h}</th>)}<th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((f) => (
-                <tr key={f.id} style={{ borderTop: `1px solid ${C.line}` }}>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{f.numero}</td>
-                  <td style={{ padding: 12 }}>{f.client}</td>
-                  <td style={{ padding: 12 }}>{fcfa(Number(f.ttc))}</td>
-                  <td style={{ padding: 12 }}><StatutBadge s={f.statut} /></td>
-                  <td style={{ padding: 12, textAlign: "right", whiteSpace: "nowrap" }}>
+              {rows.map((f, i) => (
+                <tr key={f.id} style={{ borderTop: `1px solid ${C.line}`, background: i % 2 ? "#FAFBFC" : C.white }}>
+                  <td style={{ padding: "10px 14px", fontWeight: 700, color: C.steel }}>{f.numero}</td>
+                  <td style={{ padding: "10px 14px" }}>{f.client}</td>
+                  <td style={{ padding: "10px 14px", fontWeight: 600, whiteSpace: "nowrap" }}>{fcfa(Number(f.ttc))}</td>
+                  <td style={{ padding: "10px 14px" }}><StatutBadge s={f.statut} /></td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
                     {f.statut !== "Payée" && <button onClick={() => paiement(f)} title="Enregistrer un paiement" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", color: C.green, fontWeight: 700, marginRight: 10 }}>Paiement</button>}
                     <button onClick={() => remove(f.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                   </td>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, AlertTriangle } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { Plus, Trash2, AlertTriangle, Search, ArrowDownCircle, ArrowUpCircle, Package } from "lucide-react";
+import { C, FONTS, Card, SectionTitle, btnGhost } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Article = { id: string; designation: string; unite: string; stock: number; seuil: number };
@@ -12,6 +12,7 @@ export default function StocksLive() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ designation: "", unite: "", stock: "", seuil: "" });
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
 
   async function load() {
     setLoading(true);
@@ -69,39 +70,48 @@ export default function StocksLive() {
       </Card>
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
-                <th style={{ padding: 12 }}>Désignation</th><th style={{ padding: 12 }}>Unité</th><th style={{ padding: 12 }}>Stock</th><th style={{ padding: 12 }}>Seuil</th><th style={{ padding: 12 }}>État</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((a) => {
-                const bas = Number(a.stock) < Number(a.seuil);
+      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (() => {
+        const bas = rows.filter((a) => Number(a.stock) < Number(a.seuil)).length;
+        const list = rows.filter((a) => a.designation.toLowerCase().includes(q.trim().toLowerCase()));
+        return (
+          <>
+            <SectionTitle icon={Package} action={<div style={{ fontSize: 13, color: C.steelSoft }}>{bas > 0 ? <b style={{ color: C.red }}>{bas} sous seuil</b> : <b style={{ color: C.green }}>Tous au-dessus du seuil</b>} · {rows.length} réf.</div>}>Stocks &amp; matériaux</SectionTitle>
+            <div style={{ position: "relative", maxWidth: 340 }}>
+              <Search size={16} color={C.steelSoft} style={{ position: "absolute", left: 12, top: 11 }} />
+              <input placeholder="Rechercher un matériau…" value={q} onChange={(e) => setQ(e.target.value)} style={{ ...input, paddingLeft: 36, width: "100%", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+              {list.map((a) => {
+                const alerte = Number(a.stock) < Number(a.seuil);
                 return (
-                  <tr key={a.id} style={{ borderTop: `1px solid ${C.line}` }}>
-                    <td style={{ padding: 12, fontWeight: 600 }}>{a.designation}</td>
-                    <td style={{ padding: 12 }}>{a.unite}</td>
-                    <td style={{ padding: 12, color: bas ? C.red : C.steel, fontWeight: bas ? 700 : 400 }}>{Number(a.stock)}</td>
-                    <td style={{ padding: 12 }}>{Number(a.seuil)}</td>
-                    <td style={{ padding: 12 }}>
-                      {bas ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: C.red, fontSize: 12, fontWeight: 700 }}><AlertTriangle size={14} /> Sous seuil</span> : <span style={{ color: C.green, fontSize: 12, fontWeight: 700 }}>OK</span>}
-                    </td>
-                    <td style={{ padding: 12, textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button onClick={() => mouvement(a, "ENTREE")} title="Entrée stock" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: C.green, fontWeight: 700, marginRight: 6 }}>+ Entrée</button>
-                      <button onClick={() => mouvement(a, "SORTIE")} title="Sortie stock" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: C.orange, fontWeight: 700, marginRight: 10 }}>− Sortie</button>
-                      <button onClick={() => remove(a.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
-                    </td>
-                  </tr>
+                  <Card key={a.id} style={{ padding: 16, borderLeft: `4px solid ${alerte ? C.red : C.green}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.steel }}>{a.designation}</div>
+                        <div style={{ fontSize: 12, color: C.steelSoft }}>Unité : {a.unite}</div>
+                      </div>
+                      {alerte ? <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} /> : <button onClick={() => remove(a.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, padding: 0 }}><Trash2 size={16} /></button>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 10 }}>
+                      <span style={{ fontFamily: FONTS.condensed, fontSize: 32, fontWeight: 700, color: alerte ? C.red : C.steel }}>{Number(a.stock)}</span>
+                      <span style={{ fontSize: 13, color: C.steelSoft }}>{a.unite} · seuil {Number(a.seuil)}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button style={{ ...btnGhost, color: C.green, borderColor: C.greenSoft, flex: 1, justifyContent: "center" }} onClick={() => mouvement(a, "ENTREE")}>
+                        <ArrowDownCircle size={14} /> Entrée
+                      </button>
+                      <button style={{ ...btnGhost, color: C.red, borderColor: C.redSoft, flex: 1, justifyContent: "center" }} onClick={() => mouvement(a, "SORTIE")}>
+                        <ArrowUpCircle size={14} /> Sortie
+                      </button>
+                    </div>
+                  </Card>
                 );
               })}
-              {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 16, color: C.steelSoft }}>Aucun article.</td></tr>}
-            </tbody>
-          </table>
-        </Card>
-      )}
+              {list.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>{q ? "Aucun matériau pour cette recherche." : "Aucun article."}</div>}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
