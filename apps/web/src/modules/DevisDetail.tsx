@@ -209,6 +209,30 @@ export default function DevisDetail({ devisId, numero, client, statut, onBack }:
         <button type="submit" style={{ padding: "8px 14px", border: "none", borderRadius: 8, background: C.steelMid, color: C.white, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}><Plus size={15} /> Lot</button>
       </form>
 
+      {lots.length > 0 && (
+        <Card style={{ borderLeft: `4px solid ${C.orange}` }}>
+          <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 14 }}>Récapitulatif général</div>
+          <div style={{ display: "grid", gap: 6, fontSize: 14, maxWidth: 480 }}>
+            {lots.map((lot) => {
+              const stLot = sous.filter((s) => s.lotId === lot.id).reduce((a, so) => a + lignes.filter((l) => l.sousOuvrageId === so.id).reduce((b, l) => b + montantLigne(l), 0), 0);
+              return (
+                <div key={lot.id} style={{ display: "flex", justifyContent: "space-between", borderBottom: `1px dashed ${C.line}`, paddingBottom: 4 }}>
+                  <span style={{ color: C.steelSoft }}>{lot.nom}</span><b>{fcfa(stLot)}</b>
+                </div>
+              );
+            })}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span>Total général HT</span><b>{fcfa(totalHT)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: C.red }}><span>Remise {remise.toLocaleString("fr-FR")} %</span><b>−{fcfa(remiseAmt)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Total après remise</span><b>{fcfa(htNet)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Incidence TVA {(TVA_DEFAULT * 100).toLocaleString("fr-FR")} %</span><b>{fcfa(tva)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: FONTS.condensed, fontSize: 19, fontWeight: 700, color: C.orange, borderTop: `2px solid ${C.steel}`, paddingTop: 8 }}>
+              <span>TOTAL GÉNÉRAL TTC</span><span>{fcfa(ttc)}</span>
+            </div>
+            {surface > 0 && <div style={{ fontSize: 12, color: C.steelSoft }}>Soit {fcfa(Math.round(ttc / surface))} TTC/m² pour {surface} m² — comparable entre projets et extrapolable aux variantes.</div>}
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div style={{ display: "grid", gap: 8, maxWidth: 360, marginLeft: "auto", fontSize: 14 }}>
           <Row label="Total HT" val={fcfa(totalHT)} />
