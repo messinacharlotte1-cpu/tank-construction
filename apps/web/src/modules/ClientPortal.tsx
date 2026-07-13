@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   HardHat, LogOut, UserCircle, Home, ArrowLeft, Printer, Landmark, Smartphone,
-  Building2, FileText, Image as ImageIcon, HelpCircle,
+  Building2, FileText, Image as ImageIcon, HelpCircle, Banknote, Copy, Check,
+  User as UserIcon, Phone, MapPin, MessageSquare, Send, Paperclip,
 } from "lucide-react";
 import { C, FONTS, Card, Kpi, Hazard, Banner, SectionTitle, StatutBadge, Progress, btnGhost, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -96,7 +97,15 @@ export default function ClientPortal({ email }: { email?: string }) {
           <EspaceAcquereur resas={resas} />
         )}
 
-        <div style={{ fontSize: 11, color: C.steelSoft, textAlign: "center" }}>Portail en lecture seule. © Tank Construction SARL — Cameroun.</div>
+        {/* Niveau compte — visible quel que soit le profil */}
+        {!loading && (hasMO || hasAcq) && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "start" }}>
+            <MesCoordonnees email={email} />
+            <Echanges />
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: C.steelSoft, textAlign: "center" }}>Portail en lecture seule pour vos projets. Vos coordonnées et vos messages restent modifiables. © Tank Construction SARL — Cameroun.</div>
       </main>
     </div>
   );
@@ -302,6 +311,7 @@ function EspaceAcquereur({ resas }: { resas: Resa[] }) {
                 <button style={{ ...btnGhost, justifyContent: "center", color: C.orange, borderColor: C.orangeSoft }} title="Paiement mobile (à activer en production)">
                   <Smartphone size={15} /> Payer par MTN MoMo / Orange Money
                 </button>
+                <Virement reference={`VEFA-${lot?.reference ?? ""}`} />
                 <div style={{ fontSize: 11, color: C.steelSoft }}>Chaque versement suit le contrat de réservation (loi n°97/003) : vous payez l'avancement réel, jamais avant. Reçus dans vos documents.</div>
               </div>
             );
@@ -387,6 +397,153 @@ function Simulateur({ prixLot }: { prixLot: number }) {
         ))}
       </div>
       <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 10 }}>Estimation indicative (amortissement constant). Ne vaut pas offre de prêt.</div>
+    </Card>
+  );
+}
+
+// ── Virement bancaire (coordonnées indicatives, référence = lot) ─────────────
+function Virement({ reference }: { reference: string }) {
+  const [copied, setCopied] = useState<string>("");
+  const rib = "CM21 10005 00012 34567890123 45";
+  const copy = (label: string, val: string) => { navigator.clipboard?.writeText(val); setCopied(label); setTimeout(() => setCopied(""), 1500); };
+  const Row = ({ label, val, k }: { label: string; val: string; k?: boolean }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+      <span style={{ color: C.steelSoft }}>{label}</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        <b style={{ color: C.steel, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis" }}>{val}</b>
+        {k && <button onClick={() => copy(label, val)} title="Copier" style={{ background: "none", border: "none", cursor: "pointer", color: copied === label ? C.green : C.steelSoft, display: "flex", padding: 2, flexShrink: 0 }}>{copied === label ? <Check size={14} /> : <Copy size={14} />}</button>}
+      </span>
+    </div>
+  );
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: 12, display: "grid", gap: 7, background: C.concrete }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: C.steel, textTransform: "uppercase", letterSpacing: 0.5 }}><Banknote size={15} color={C.orange} /> Virement bancaire</div>
+      <Row label="Bénéficiaire" val="Tank Construction SARL" />
+      <Row label="Banque" val="Afriland First Bank" />
+      <Row label="RIB / IBAN" val={rib} k />
+      <Row label="Référence" val={reference} k />
+      <div style={{ fontSize: 11, color: C.steelSoft }}>Indiquez la référence en libellé du virement — elle permet le rapprochement automatique. Coordonnées indicatives : confirmez auprès de votre conseiller avant tout virement.</div>
+    </div>
+  );
+}
+
+// ── Mes coordonnées (données personnelles, éditables via RPC) ────────────────
+function MesCoordonnees({ email }: { email?: string }) {
+  const [nom, setNom] = useState(""); const [tel, setTel] = useState(""); const [adr, setAdr] = useState("");
+  const [edit, setEdit] = useState(false); const [busy, setBusy] = useState(false); const [ok, setOk] = useState(false);
+  async function load() {
+    const { data } = await supabase.from("users").select("nom,telephone,adresse").limit(1).maybeSingle();
+    if (data) { setNom((data as { nom?: string }).nom ?? ""); setTel((data as { telephone?: string }).telephone ?? ""); setAdr((data as { adresse?: string }).adresse ?? ""); }
+  }
+  useEffect(() => { void load(); }, []);
+  async function save() {
+    setBusy(true); setOk(false);
+    const { error } = await supabase.rpc("update_my_profile", { p_nom: nom, p_telephone: tel, p_adresse: adr });
+    setBusy(false);
+    if (!error) { setOk(true); setEdit(false); setTimeout(() => setOk(false), 2500); }
+  }
+  const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans, width: "100%", boxSizing: "border-box", marginTop: 4 };
+  const Line = ({ icon: Ic, label, val }: { icon: React.ElementType; label: string; val: string }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${C.line}` }}>
+      <Ic size={16} color={C.steelSoft} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: C.steelSoft, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+        <div style={{ fontSize: 14, color: C.steel, overflow: "hidden", textOverflow: "ellipsis" }}>{val || <span style={{ color: C.steelSoft }}>—</span>}</div>
+      </div>
+    </div>
+  );
+  return (
+    <Card>
+      <SectionTitle icon={UserIcon} action={!edit ? <button onClick={() => setEdit(true)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12 }}>Modifier</button> : undefined}>Mes coordonnées</SectionTitle>
+      {ok && <Banner tone="success">Coordonnées mises à jour.</Banner>}
+      {!edit ? (
+        <div style={{ display: "grid" }}>
+          <Line icon={UserIcon} label="Nom" val={nom} />
+          <Line icon={MessageSquare} label="Email (identifiant)" val={email ?? ""} />
+          <Line icon={Phone} label="Téléphone" val={tel} />
+          <Line icon={MapPin} label="Adresse" val={adr} />
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+          <label style={{ fontSize: 12, color: C.steelSoft }}>Nom<input style={inp} value={nom} onChange={(e) => setNom(e.target.value)} /></label>
+          <label style={{ fontSize: 12, color: C.steelSoft }}>Téléphone<input style={inp} value={tel} onChange={(e) => setTel(e.target.value)} placeholder="+237 6 XX XX XX XX" /></label>
+          <label style={{ fontSize: 12, color: C.steelSoft }}>Adresse<input style={inp} value={adr} onChange={(e) => setAdr(e.target.value)} placeholder="Quartier, ville" /></label>
+          <div style={{ fontSize: 11, color: C.steelSoft }}>L'email d'identification n'est pas modifiable ici — contactez votre conseiller.</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+            <button onClick={save} disabled={busy} style={{ background: C.orange, color: C.white, border: "none", borderRadius: 8, padding: "8px 16px", cursor: busy ? "wait" : "pointer", fontWeight: 700, fontSize: 13, fontFamily: FONTS.sans }}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
+            <button onClick={() => { setEdit(false); void load(); }} style={{ ...btnGhost, padding: "8px 16px", fontSize: 13 }}>Annuler</button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ── Échanges avec l'équipe commerciale (fil + pièce jointe) ──────────────────
+type Msg = { id: string; auteur: string; nom: string; sujet: string | null; corps: string; pieceUrl: string | null; pieceNom: string | null; createdAt: string };
+
+function Echanges() {
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [corps, setCorps] = useState(""); const [sujet, setSujet] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null); const [uid, setUid] = useState("");
+  async function load() {
+    const { data } = await supabase.from("client_messages").select("id,auteur,nom,sujet,corps,pieceUrl,pieceNom,createdAt").order("createdAt");
+    setMsgs((data as Msg[]) ?? []);
+  }
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setUid(data.user?.id ?? "")); void load(); }, []);
+  async function send() {
+    if (!corps.trim()) return;
+    setBusy(true); setErr(null);
+    let pieceUrl: string | null = null, pieceNom: string | null = null;
+    if (file && uid) {
+      const path = `${uid}/${crypto.randomUUID()}-${file.name}`;
+      const up = await supabase.storage.from("portail-client").upload(path, file);
+      if (up.error) { setBusy(false); setErr("Pièce jointe : " + up.error.message); return; }
+      pieceUrl = supabase.storage.from("portail-client").getPublicUrl(path).data.publicUrl; pieceNom = file.name;
+    }
+    const { error } = await supabase.rpc("send_client_message", { p_sujet: sujet || null, p_corps: corps, p_piece_url: pieceUrl, p_piece_nom: pieceNom });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setCorps(""); setSujet(""); setFile(null); void load();
+  }
+  const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans, width: "100%", boxSizing: "border-box" };
+
+  return (
+    <Card>
+      <SectionTitle icon={MessageSquare}>Échanger avec mon conseiller</SectionTitle>
+      <div style={{ display: "grid", gap: 10, maxHeight: 320, overflow: "auto", paddingRight: 4, marginBottom: 12 }}>
+        {msgs.length === 0 && <div style={{ fontSize: 13, color: C.steelSoft }}>Aucun échange pour l'instant. Posez votre question ou partagez un document ci-dessous — l'équipe commerciale vous répondra ici.</div>}
+        {msgs.map((m) => {
+          const mine = m.auteur === "client";
+          return (
+            <div key={m.id} style={{ justifySelf: mine ? "end" : "start", maxWidth: "88%", background: mine ? C.orangeSoft : C.concrete, border: `1px solid ${mine ? C.orangeSoft : C.line}`, borderRadius: 10, padding: "9px 12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, color: C.steelSoft, marginBottom: 3 }}>
+                <b style={{ color: mine ? C.orange : C.steel }}>{mine ? "Vous" : m.nom}</b>
+                <span>{new Date(m.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+              {m.sujet && <div style={{ fontSize: 12, fontWeight: 700, color: C.steel }}>{m.sujet}</div>}
+              <div style={{ fontSize: 13.5, color: C.steel, whiteSpace: "pre-wrap" }}>{m.corps}</div>
+              {m.pieceUrl && <a href={m.pieceUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: 12, color: C.orange, fontWeight: 600, textDecoration: "none" }}><Paperclip size={13} /> {m.pieceNom ?? "Pièce jointe"}</a>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "grid", gap: 8, borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
+        <input style={inp} value={sujet} onChange={(e) => setSujet(e.target.value)} placeholder="Sujet (optionnel)" />
+        <textarea style={{ ...inp, minHeight: 64, resize: "vertical" }} value={corps} onChange={(e) => setCorps(e.target.value)} placeholder="Votre message à l'équipe commerciale…" />
+        {err && <div style={{ fontSize: 12, color: C.red }}>{err}</div>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 12, cursor: "pointer" }}>
+            <Paperclip size={14} /> {file ? file.name.slice(0, 22) : "Joindre un document"}
+            <input type="file" style={{ display: "none" }} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </label>
+          {file && <button onClick={() => setFile(null)} style={{ background: "none", border: "none", color: C.steelSoft, cursor: "pointer", fontSize: 12 }}>retirer</button>}
+          <button onClick={send} disabled={busy || !corps.trim()} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: corps.trim() ? C.orange : C.line, color: C.white, border: "none", borderRadius: 8, padding: "8px 16px", cursor: busy ? "wait" : corps.trim() ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 13, fontFamily: FONTS.sans }}>
+            <Send size={14} /> {busy ? "Envoi…" : "Envoyer"}
+          </button>
+        </div>
+      </div>
     </Card>
   );
 }

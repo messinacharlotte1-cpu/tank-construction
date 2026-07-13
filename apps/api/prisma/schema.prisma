@@ -64,6 +64,8 @@ model User {
   tenant   Tenant    @relation(fields: [tenantId], references: [id])
   email    String
   nom      String
+  telephone String? // coordonnées client (portail)
+  adresse   String? // coordonnées client (portail)
   role     Role      @default(TERRAIN)
   acces    AccesMode @default(EMAIL_2FA)
   actif    Boolean   @default(true)
@@ -594,4 +596,23 @@ model AppelDeFonds {
 
   @@index([reservationId])
   @@map("appels_de_fonds")
+}
+
+// Portail client — fil d'échange client ↔ équipe commerciale (avec pièce jointe optionnelle).
+model ClientMessage {
+  id        String   @id @default(uuid())
+  userId    String // auth.uid du client (fil rattaché au compte)
+  tenantId  String // agence destinataire (scope staff)
+  auteur    String // "client" | "agence"
+  nom       String // nom affiché de l'auteur
+  sujet     String?
+  corps     String
+  pieceUrl  String?
+  pieceNom  String?
+  lu        Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("client_messages")
 }

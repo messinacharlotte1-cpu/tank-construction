@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { UserCircle, Home, ArrowLeft, Printer, Landmark, Smartphone, Building2, FileText, Image as ImageIcon } from "lucide-react";
+import { UserCircle, Home, ArrowLeft, Printer, Landmark, Smartphone, Building2, FileText, Image as ImageIcon, MessageSquare, Send, Paperclip, ChevronDown, ChevronRight } from "lucide-react";
 import { C, FONTS, Card, Kpi, Hazard, Banner, SectionTitle, StatutBadge, Progress, btnGhost, fcfa } from "@tank/ui";
-import { supabase } from "../lib/supabase";
+import { supabase, getTenant } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
 import { mensualite } from "../lib/calc";
 import PlanTypo from "./PlanTypo";
@@ -289,6 +289,7 @@ export default function PortailAcquereur() {
   return (
     <div style={{ display: "grid", gap: 16 }}>
       {switcher}
+      <MessagesClientsStaff />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
         {resas.map((r) => (
           <Card key={r.id} style={{ cursor: "pointer" }} >
@@ -336,6 +337,103 @@ function Simulateur({ prixLot }: { prixLot: number }) {
         ))}
       </div>
       <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 10 }}>Estimation indicative (amortissement constant). Ne vaut pas offre de prêt.</div>
+    </Card>
+  );
+}
+
+// ── Inbox staff : messages des clients (portail), groupés par client, avec réponse ──
+type CMsg = { id: string; userId: string; auteur: string; nom: string; sujet: string | null; corps: string; pieceUrl: string | null; pieceNom: string | null; lu: boolean; createdAt: string };
+
+function MessagesClientsStaff() {
+  const [msgs, setMsgs] = useState<CMsg[]>([]);
+  const [tid, setTid] = useState<string | null>(null);
+  const [staffNom, setStaffNom] = useState("Équipe commerciale");
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const { data } = await supabase.from("client_messages").select("id,userId,auteur,nom,sujet,corps,pieceUrl,pieceNom,lu,createdAt").order("createdAt");
+    setMsgs((data as CMsg[]) ?? []);
+  }
+  useEffect(() => {
+    (async () => {
+      setTid(await getTenant());
+      const { data: u } = await supabase.auth.getUser();
+      if (u.user?.id) { const { data: me } = await supabase.from("users").select("nom").eq("id", u.user.id).maybeSingle(); if (me?.nom) setStaffNom(me.nom); }
+      void load();
+    })();
+  }, []);
+
+  // Regroupe par client (userId) ; nom = dernier nom d'auteur 'client'.
+  const threads = Array.from(msgs.reduce((map, m) => { const g = map.get(m.userId) ?? []; g.push(m); map.set(m.userId, g); return map; }, new Map<string, CMsg[]>()).entries());
+
+  async function openAndMark(userId: string) {
+    setOpenThread(openThread === userId ? null : userId);
+    // Marque lus les messages clients non lus de ce fil.
+    const unread = msgs.filter((m) => m.userId === userId && m.auteur === "client" && !m.lu).map((m) => m.id);
+    if (unread.length) { await supabase.from("client_messages").update({ lu: true }).in("id", unread); setMsgs((s) => s.map((m) => unread.includes(m.id) ? { ...m, lu: true } : m)); }
+  }
+  async function send(userId: string) {
+    if (!reply.trim() || !tid) return;
+    setBusy(true);
+    const { error } = await supabase.from("client_messages").insert({ id: crypto.randomUUID(), userId, tenantId: tid, auteur: "agence", nom: staffNom, corps: reply.trim(), lu: false, createdAt: new Date().toISOString() });
+    setBusy(false);
+    if (!error) { setReply(""); void load(); }
+  }
+
+  if (msgs.length === 0) return null;
+  const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans, width: "100%", boxSizing: "border-box" };
+  const totalUnread = msgs.filter((m) => m.auteur === "client" && !m.lu).length;
+
+  return (
+    <Card>
+      <SectionTitle icon={MessageSquare} action={totalUnread > 0 ? <span style={{ background: C.red, color: C.white, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 8px" }}>{totalUnread} non lu{totalUnread > 1 ? "s" : ""}</span> : undefined}>Messages des clients</SectionTitle>
+      <div style={{ display: "grid", gap: 8 }}>
+        {threads.map(([userId, list]) => {
+          const opened = openThread === userId;
+          const clientNom = [...list].reverse().find((m) => m.auteur === "client")?.nom ?? "Client";
+          const unread = list.filter((m) => m.auteur === "client" && !m.lu).length;
+          const last = list[list.length - 1];
+          return (
+            <div key={userId} style={{ border: `1px solid ${C.line}`, borderRadius: 10, overflow: "hidden" }}>
+              <button onClick={() => openAndMark(userId)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: opened ? C.concrete : C.white, border: "none", cursor: "pointer", textAlign: "left" }}>
+                {opened ? <ChevronDown size={16} color={C.steelSoft} /> : <ChevronRight size={16} color={C.steelSoft} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.steel }}>{clientNom}</div>
+                  <div style={{ fontSize: 12, color: C.steelSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{last.auteur === "client" ? "" : "Vous : "}{last.corps}</div>
+                </div>
+                {unread > 0 && <span style={{ background: C.red, color: C.white, fontSize: 10, fontWeight: 700, borderRadius: 999, padding: "1px 6px" }}>{unread}</span>}
+                <span style={{ fontSize: 11, color: C.steelSoft }}>{new Date(last.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}</span>
+              </button>
+              {opened && (
+                <div style={{ padding: 12, display: "grid", gap: 10, borderTop: `1px solid ${C.line}` }}>
+                  <div style={{ display: "grid", gap: 8, maxHeight: 260, overflow: "auto" }}>
+                    {list.map((m) => {
+                      const agence = m.auteur === "agence";
+                      return (
+                        <div key={m.id} style={{ justifySelf: agence ? "end" : "start", maxWidth: "88%", background: agence ? C.orangeSoft : C.concrete, border: `1px solid ${agence ? C.orangeSoft : C.line}`, borderRadius: 10, padding: "8px 11px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, color: C.steelSoft, marginBottom: 2 }}>
+                            <b style={{ color: agence ? C.orange : C.steel }}>{agence ? "Vous" : m.nom}</b>
+                            <span>{new Date(m.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                          {m.sujet && <div style={{ fontSize: 12, fontWeight: 700, color: C.steel }}>{m.sujet}</div>}
+                          <div style={{ fontSize: 13.5, color: C.steel, whiteSpace: "pre-wrap" }}>{m.corps}</div>
+                          {m.pieceUrl && <a href={m.pieceUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: 12, color: C.orange, fontWeight: 600, textDecoration: "none" }}><Paperclip size={13} /> {m.pieceNom ?? "Pièce jointe"}</a>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                    <textarea style={{ ...inp, minHeight: 40, resize: "vertical" }} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Répondre au client…" />
+                    <button onClick={() => send(userId)} disabled={busy || !reply.trim()} style={{ display: "flex", alignItems: "center", gap: 6, background: reply.trim() ? C.orange : C.line, color: C.white, border: "none", borderRadius: 8, padding: "9px 14px", cursor: reply.trim() ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 13, fontFamily: FONTS.sans, whiteSpace: "nowrap" }}><Send size={14} /> Envoyer</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </Card>
   );
 }
