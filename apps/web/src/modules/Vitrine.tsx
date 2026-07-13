@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { HardHat, MapPin, Home, ArrowLeft } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, fcfa } from "@tank/ui";
+import { HardHat, MapPin, Home, ArrowLeft, Store, UserCog, Star } from "lucide-react";
+import { C, FONTS, Card, StatutBadge, SectionTitle, Toggle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 // Page PUBLIQUE (sans authentification) — lit les programmes marqués `public` via RLS anon.
 type Lot = { reference: string; typologie: string | null; surface: number | null; prix: number; statut: string };
 type Prog = { id: string; nom: string; ville: string; lots_immo: Lot[] };
+type Artisan = { id: string; nom: string; categorie: string | null; note: number };
 const LABEL: Record<string, string> = { DISPONIBLE: "Disponible", RESERVE: "Réservé", VENDU: "Vendu" };
 
 export default function Vitrine({ onBack, embedded }: { onBack?: () => void; embedded?: boolean }) {
   const [progs, setProgs] = useState<Prog[]>([]);
+  const [artisans, setArtisans] = useState<Artisan[]>([]);
+  const [publiee, setPubliee] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +20,9 @@ export default function Vitrine({ onBack, embedded }: { onBack?: () => void; emb
       setProgs((data as unknown as Prog[]) ?? []);
       setLoading(false);
     });
-  }, []);
+    // Annuaire = fournisseurs/sous-traitants notés (embarqué uniquement, nécessite session).
+    if (embedded) supabase.from("fournisseurs").select("id,nom,categorie,note").order("note", { ascending: false }).then(({ data }) => setArtisans((data as Artisan[]) ?? []));
+  }, [embedded]);
 
   return (
     <div style={{ minHeight: embedded ? undefined : "100vh", background: embedded ? undefined : C.concrete }}>
@@ -31,6 +36,15 @@ export default function Vitrine({ onBack, embedded }: { onBack?: () => void; emb
         </header>
       )}
       <main style={{ maxWidth: embedded ? "none" : 1100, margin: "0 auto", padding: embedded ? 0 : 24, display: "grid", gap: 20 }}>
+        {embedded && (
+          <>
+            <SectionTitle icon={Store} action={
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.steelSoft }}>Vitrine publiée <Toggle on={publiee} onChange={setPubliee} /></label>
+            }>Vitrine publique &amp; annuaire</SectionTitle>
+            <div style={{ fontSize: 12.5, color: C.steelSoft }}>Page publique auto-générée depuis la grille des lots — partageable sur WhatsApp/Facebook. Aperçu ci-dessous.</div>
+          </>
+        )}
+        <div style={{ display: "grid", gap: 20, opacity: embedded && !publiee ? 0.45 : 1 }}>
         {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : progs.length === 0 ? <div style={{ color: C.steelSoft }}>Aucun programme publié.</div> : progs.map((p) => (
           <Card key={p.id}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -54,6 +68,30 @@ export default function Vitrine({ onBack, embedded }: { onBack?: () => void; emb
             </div>
           </Card>
         ))}
+        </div>
+
+        {embedded && (
+          <Card>
+            <SectionTitle icon={UserCog}>Annuaire d'artisans qualifiés (réseau du promoteur)</SectionTitle>
+            <div style={{ fontSize: 12.5, color: C.steelSoft, marginBottom: 10 }}>Notes issues des évaluations réelles (module Fournisseurs). Badge « Vérifié » = note ≥ 4/5.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+              {artisans.map((a) => (
+                <div key={a.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 14, display: "grid", gap: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <b style={{ fontSize: 14, color: C.steel }}>{a.nom}</b>
+                    {a.note >= 4 && <span style={{ background: C.greenSoft, color: C.green, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>✓ VÉRIFIÉ</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.steelSoft }}>{a.categorie ?? "—"}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    {[1, 2, 3, 4, 5].map((s) => <Star key={s} size={13} fill={s <= a.note ? C.orange : "none"} color={s <= a.note ? C.orange : C.line} />)}
+                    <b style={{ fontSize: 12.5, marginLeft: 4, color: C.steel }}>{a.note ? a.note.toFixed(1) : "—"}</b>
+                  </div>
+                </div>
+              ))}
+              {artisans.length === 0 && <div style={{ fontSize: 13, color: C.steelSoft }}>Aucun artisan noté. Notez vos fournisseurs dans Ressources → Fournisseurs.</div>}
+            </div>
+          </Card>
+        )}
         <div style={{ textAlign: "center", color: C.steelSoft, fontSize: 12 }}>Vitrine publique — données en lecture seule.</div>
       </main>
     </div>

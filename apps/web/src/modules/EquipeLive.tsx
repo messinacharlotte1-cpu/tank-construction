@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { UserCog } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, Kpi } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type U = { id: string; email: string; nom: string; role: string; actif: boolean };
@@ -26,17 +26,24 @@ export default function EquipeLive() {
   }
 
   const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 13, fontFamily: FONTS.sans };
+  const actifs = rows.filter((u) => u.actif).length;
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ color: C.steelSoft, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}><UserCog size={16} /> Matrice rôles ×  utilisateurs. Modification réservée à la direction (RLS).</div>
+    <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={UserCog}>Équipe de l'agence</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+        <Card style={{ padding: 16 }}><Kpi label="Utilisateurs" value={rows.length} /></Card>
+        <Card style={{ padding: 16 }}><Kpi label="Actifs" value={actifs} color={C.green} /></Card>
+        <Card style={{ padding: 16 }}><Kpi label="Rôles distincts" value={new Set(rows.map((u) => u.role)).size} /></Card>
+      </div>
+      <div style={{ color: C.steelSoft, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}><UserCog size={16} /> Matrice rôles × utilisateurs. Modification réservée à la direction (RLS).</div>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}><th style={{ padding: 12 }}>Utilisateur</th><th style={{ padding: 12 }}>Email</th><th style={{ padding: 12 }}>Rôle</th><th style={{ padding: 12 }}>Statut</th></tr></thead>
+            <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>{["Utilisateur", "Email", "Rôle", "Statut"].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, fontSize: 13 }}>{h}</th>)}</tr></thead>
             <tbody>
-              {rows.map((u) => (
-                <tr key={u.id} style={{ borderTop: `1px solid ${C.line}` }}>
+              {rows.map((u, i) => (
+                <tr key={u.id} style={{ borderTop: `1px solid ${C.line}`, background: i % 2 ? "#FAFBFC" : C.white }}>
                   <td style={{ padding: 12, fontWeight: 600 }}>{u.nom}</td>
                   <td style={{ padding: 12 }}>{u.email}</td>
                   <td style={{ padding: 12 }}><select style={inp} value={u.role} onChange={(e) => setRole(u, e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></td>

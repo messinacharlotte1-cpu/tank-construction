@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Save, Plus } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { Save, Plus, Settings } from "lucide-react";
+import { C, FONTS, Card, SectionTitle } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type S = { id: string; cle: string; valeur: string };
@@ -41,6 +41,7 @@ export default function ParametresLive() {
   const inp: React.CSSProperties = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   return (
     <div style={{ display: "grid", gap: 16, maxWidth: 640 }}>
+      <SectionTitle icon={Settings}>Paramètres de l'agence</SectionTitle>
       <div style={{ fontSize: 13, color: C.steelSoft }}>Taux et préfixes du tenant. Un changement ne réécrit jamais un document déjà émis (snapshot).</div>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
       {ok && <Card style={{ borderColor: C.green, color: C.green }}>{ok}</Card>}

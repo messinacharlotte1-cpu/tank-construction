@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, ArrowLeft, ShieldCheck, Printer, KeyRound, Trash } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { Plus, Trash2, ArrowLeft, ShieldCheck, Printer, KeyRound, Scale, AlertTriangle, ClipboardCheck } from "lucide-react";
+import { C, FONTS, Card, SectionTitle, Banner, fcfa } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
+
+// Mise en conformité du contrat de réservation — référence droit camerounais (loi n°97/003, OHADA).
+const CONFORMITE = [
+  { avant: "Renvoi au Code de la construction et de l'habitation français + loi de 1965 sur la copropriété.", apres: "Renvoi à la loi camerounaise n°97/003 (promotion immobilière) et au droit foncier CM." },
+  { avant: "Dépôt de garantie libellé en euros, séquestre chez un notaire français.", apres: "Dépôt en FCFA, séquestre chez un notaire camerounais agréé." },
+  { avant: "Clause de rétractation « loi SRU » (10 jours) inopérante au Cameroun.", apres: "Délai de réflexion et conditions de résiliation conformes au droit CM." },
+  { avant: "TVA à 20 % (taux français).", apres: "TVA 19,25 % (taux camerounais en vigueur)." },
+];
 
 type Contrat = {
   id: string; reference: string; type: string; client: string; objet: string | null;
@@ -58,6 +66,30 @@ export default function ContratsLive() {
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Scale}>Contrats &amp; conformité — droit camerounais</SectionTitle>
+
+      <Banner tone="danger" icon={AlertTriangle}>
+        <b>Audit du modèle en circulation :</b> les contrats de réservation recyclés d'un modèle français (Code de la construction, loi de 1965, dépôt en euros) sont inopérants devant le juge camerounais et exposent le promoteur. La bibliothèque ci-dessous génère des contrats fondés sur les textes en vigueur au Cameroun.
+      </Banner>
+
+      <Card>
+        <SectionTitle icon={ClipboardCheck}>Mise en conformité du contrat de réservation (avant → après)</SectionTitle>
+        <div style={{ display: "grid", gap: 8 }}>
+          {CONFORMITE.map((a, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, fontSize: 12.5, border: `1px solid ${C.line}`, borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ padding: "10px 12px", background: C.redSoft, color: C.steel }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 3 }}>Modèle français (à proscrire)</div>
+                {a.avant}
+              </div>
+              <div style={{ padding: "10px 12px", background: C.greenSoft, color: C.steel }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 3 }}>Version conforme Cameroun</div>
+                {a.apres}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       <Card>
         <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={18} color={C.orange} /> Nouveau contrat
@@ -75,12 +107,12 @@ export default function ContratsLive() {
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
-              <th style={{ padding: 12 }}>Référence</th><th style={{ padding: 12 }}>Type</th><th style={{ padding: 12 }}>Client</th><th style={{ padding: 12 }}>Montant</th><th style={{ padding: 12 }}>Signature</th><th></th>
+            <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>
+              {["Référence", "Type", "Client", "Montant", "Signature"].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, fontSize: 13 }}>{h}</th>)}<th></th>
             </tr></thead>
             <tbody>
-              {rows.map((c) => (
-                <tr key={c.id} style={{ borderTop: `1px solid ${C.line}`, cursor: "pointer" }} onClick={() => setOpen(c)}>
+              {rows.map((c, i) => (
+                <tr key={c.id} style={{ borderTop: `1px solid ${C.line}`, cursor: "pointer", background: i % 2 ? "#FAFBFC" : C.white }} onClick={() => setOpen(c)}>
                   <td style={{ padding: 12, fontWeight: 600 }}>{c.reference}</td>
                   <td style={{ padding: 12 }}>{c.type}</td>
                   <td style={{ padding: 12 }}>{c.client}</td>
