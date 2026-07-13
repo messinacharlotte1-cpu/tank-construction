@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  HardHat, LogOut, Eye, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
+  HardHat, LogOut, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings, Wallet,
   Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck, ChevronDown, ChevronRight,
   Search, X, Bell,
@@ -80,7 +80,7 @@ const PAGES: Page[] = [
   { id: "parametres", label: "Paramètres", icon: Settings, group: "Administration", roles: ["DIRECTION", "SUPER_ADMIN"], render: () => <ParametresLive /> },
 ];
 
-export default function Shell({ email, onShowProto }: { email?: string; onShowProto: () => void }) {
+export default function Shell({ email }: { email?: string }) {
   const [role, setRole] = useState<string>("");
   const [page, setPage] = useState("dashboard");
   const [q, setQ] = useState("");
@@ -226,14 +226,9 @@ export default function Shell({ email, onShowProto }: { email?: string; onShowPr
               <div style={{ fontSize: 11, color: "#8FA0B2" }}>{role || "—"}</div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={onShowProto} title="Voir la maquette" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${C.steelSoft}`, color: "#B7C3CF", borderRadius: 8, padding: "7px 8px", cursor: "pointer", fontSize: 12, fontFamily: FONTS.sans }}>
-              <Eye size={14} /> Maquette
-            </button>
-            <button onClick={() => supabase.auth.signOut()} title="Se déconnecter" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${C.steelSoft}`, color: "#B7C3CF", borderRadius: 8, padding: "7px 8px", cursor: "pointer", fontSize: 12, fontFamily: FONTS.sans }}>
-              <LogOut size={14} /> Quitter
-            </button>
-          </div>
+          <button onClick={() => supabase.auth.signOut()} title="Se déconnecter" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${C.steelSoft}`, color: "#B7C3CF", borderRadius: 8, padding: "7px 8px", cursor: "pointer", fontSize: 12, fontFamily: FONTS.sans }}>
+            <LogOut size={14} /> Quitter
+          </button>
         </div>
       </aside>
 
