@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 import { Sparkles, TrendingDown, Clock, Wallet, PackageX } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { C, Card, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Predic = { icon: typeof Sparkles; titre: string; detail: string; conf: string; col: string };
+// Badge de gravité selon la couleur de la prédiction.
+const GRAV: Record<string, [string, string, string]> = {
+  [C.red]: [C.redSoft, C.red, "Haute"],
+  [C.orange]: [C.orangeSoft, C.orange, "Moyenne"],
+  [C.amber]: [C.amberSoft, C.amber, "Faible"],
+};
 
 // V1 = règles + stats simples (pas de ML, cf. README §7). Étiqueté "estimation".
 export default function PredictionsLive() {
@@ -35,19 +41,31 @@ export default function PredictionsLive() {
 
   if (loading) return <div style={{ color: C.steelSoft }}>Analyse…</div>;
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.steelSoft, fontSize: 13 }}>
-        <Sparkles size={16} color={C.orange} /> Estimations par règles (v1, pas de ML). Fiabilité = qualité des données.
+    <div style={{ display: "grid", gap: 20 }}>
+      <SectionTitle icon={Sparkles}>Prédictions &amp; alertes IA</SectionTitle>
+      <div style={{ fontSize: 13, color: C.steelSoft }}>
+        Le moteur croise pointages, stocks, avancement et historique de paiement pour anticiper au lieu de constater. Chaque prédiction indique son niveau de confiance (règles v1 — pas de ML).
       </div>
-      {preds.length === 0 && <Card style={{ color: C.green }}>✔ Aucun signal d'alerte détecté.</Card>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px,1fr))", gap: 14 }}>
-        {preds.map((p, i) => (
-          <Card key={i} style={{ borderLeft: `4px solid ${p.col}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: C.steel }}><p.icon size={18} color={p.col} /> {p.titre}</div>
-            <div style={{ fontSize: 13, color: C.steelSoft, marginTop: 6 }}>{p.detail}</div>
-            <div style={{ marginTop: 8, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, color: C.steelSoft }}>Estimation · confiance {p.conf}</div>
-          </Card>
-        ))}
+      {preds.length === 0 && <Card style={{ color: C.green }}>✔ Aucun signal d'alerte détecté. Tous les indicateurs sont au vert.</Card>}
+      <div style={{ display: "grid", gap: 12 }}>
+        {preds.map((p, i) => {
+          const [bg, fg, lab] = GRAV[p.col] ?? [C.concrete, C.steelSoft, "Info"];
+          return (
+            <Card key={i} style={{ borderLeft: `4px solid ${p.col}`, display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <b style={{ fontSize: 14.5, color: C.steel, display: "flex", alignItems: "center", gap: 8 }}><p.icon size={18} color={p.col} /> {p.titre}</b>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ background: bg, color: fg, fontSize: 10.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999, textTransform: "uppercase" }}>{lab}</span>
+                  <span style={{ fontSize: 12, color: C.steelSoft }}>confiance <b style={{ color: C.steel }}>{p.conf}</b></span>
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: C.steel }}>{p.detail}</div>
+            </Card>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.steelSoft }}>
+        Prédictions statistiques indicatives — la décision reste humaine. Modèles sur les données de l'entreprise uniquement (aucune donnée partagée entre clients de la plateforme).
       </div>
     </div>
   );

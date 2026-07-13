@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Printer, Wallet } from "lucide-react";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { Printer, Wallet, Banknote, Download } from "lucide-react";
+import { C, FONTS, Card, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { paieJour, cnps } from "../lib/calc";
 import { printDocument, fcfaP } from "../lib/pdf";
@@ -35,7 +35,18 @@ export default function PaieLive() {
   }, []);
 
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
-  const tot = bulletins.reduce((s, b) => ({ brut: s.brut + b.brut, net: s.net + b.net, cout: s.cout + b.coutTotal }), { brut: 0, net: 0, cout: 0 });
+  const tot = bulletins.reduce((s, b) => ({ brut: s.brut + b.brut, net: s.net + b.net, cout: s.cout + b.coutTotal, cnps: s.cnps + b.retenueSal + b.chargeEmp }), { brut: 0, net: 0, cout: 0, cnps: 0 });
+
+  // « Générer le DIPE » : imprime le récapitulatif de paie de tous les salariés.
+  function dipe() {
+    const body = `<div class="brand"><span class="logo">TANK</span><h1>Récapitulatif de paie — DIPE</h1></div><div class="bar"></div>
+      <p class="muted">CNPS salarié ${taux.sal}% · employeur ${taux.emp}% (indicatifs)</p>
+      <table><thead><tr><th>Salarié</th><th class="right">Brut</th><th class="right">CNPS sal.</th><th class="right">Net</th><th class="right">Coût employeur</th></tr></thead><tbody>
+      ${bulletins.map((b) => `<tr><td>${b.ouvrier}</td><td class="right">${fcfaP(b.brut)}</td><td class="right">${fcfaP(b.retenueSal)}</td><td class="right">${fcfaP(b.net)}</td><td class="right">${fcfaP(b.coutTotal)}</td></tr>`).join("")}
+      </tbody></table>
+      <p class="right"><b>Masse brute : ${fcfaP(tot.brut)} · Net : ${fcfaP(tot.net)} · CNPS dues : ${fcfaP(tot.cnps)}</b></p>`;
+    printDocument("DIPE-paie", body);
+  }
 
   function pdf(b: Bulletin) {
     const body = `<div class="brand"><span class="logo">TANK</span><h1>Bulletin de paie</h1></div><div class="bar"></div>
@@ -52,18 +63,21 @@ export default function PaieLive() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      <SectionTitle icon={Banknote} action={
+        <button onClick={dipe} disabled={bulletins.length === 0} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.orange, color: C.white, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: bulletins.length ? "pointer" : "not-allowed", opacity: bulletins.length ? 1 : 0.5, fontFamily: FONTS.sans }}><Download size={15} /> Générer le DIPE</button>
+      }>Paie &amp; CNPS</SectionTitle>
       <div style={{ fontSize: 13, color: C.steelSoft, display: "flex", alignItems: "center", gap: 8 }}><Wallet size={16} color={C.orange} /> Brut = pointages (P=1/DM=0,5/A=0). CNPS salarié {taux.sal}% · employeur {taux.emp}% (paramétrable). Taux indicatifs.</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 14 }}>
-        {[["Total brut", fcfa(tot.brut), C.steel], ["Total net", fcfa(tot.net), C.green], ["Coût employeur", fcfa(tot.cout), C.orange]].map(([l, v, col], i) => (
-          <Card key={i} style={{ padding: 16 }}><div style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft, textTransform: "uppercase" }}>{l}</div><div style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: col as string }}>{v}</div></Card>
+        {[["Masse salariale brute", fcfa(tot.brut), C.steel], ["Net à payer", fcfa(tot.net), C.green], ["Cotisations CNPS dues", fcfa(tot.cnps), C.orange]].map(([l, v, col], i) => (
+          <Card key={i} style={{ padding: 16 }}><div style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft, textTransform: "uppercase" }}>{l}</div><div style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: col as string }}>{v}</div>{i === 2 && <div style={{ fontSize: 11, color: C.steelSoft }}>Échéance : 15 du mois suivant</div>}</Card>
         ))}
       </div>
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead><tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}><th style={{ padding: 12 }}>Salarié</th><th style={{ padding: 12 }}>Brut</th><th style={{ padding: 12 }}>Ret. CNPS</th><th style={{ padding: 12 }}>Net</th><th style={{ padding: 12 }}>Coût employeur</th><th></th></tr></thead>
+          <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>{["Salarié", "Brut", "Ret. CNPS", "Net", "Coût employeur"].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600, fontSize: 13 }}>{h}</th>)}<th></th></tr></thead>
           <tbody>
-            {bulletins.map((b) => (
-              <tr key={b.ouvrier} style={{ borderTop: `1px solid ${C.line}` }}>
+            {bulletins.map((b, i) => (
+              <tr key={b.ouvrier} style={{ borderTop: `1px solid ${C.line}`, background: i % 2 ? "#FAFBFC" : C.white }}>
                 <td style={{ padding: 12, fontWeight: 600 }}>{b.ouvrier}</td>
                 <td style={{ padding: 12, whiteSpace: "nowrap" }}>{fcfa(b.brut)}</td>
                 <td style={{ padding: 12, whiteSpace: "nowrap", color: C.red }}>− {fcfa(b.retenueSal)}</td>
