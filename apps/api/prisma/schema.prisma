@@ -36,6 +36,7 @@ model Tenant {
   reserves   Reserve[]
   medias     Media[]
   auditLogs  AuditLog[]
+  securiteChecklist SecuriteChecklist[]
 
   @@map("tenants")
 }
@@ -103,6 +104,20 @@ model Chantier {
 
   @@index([tenantId])
   @@map("chantiers")
+}
+
+// Checklist sécurité journalière — signée chaque matin par le chef de chantier (offline).
+model SecuriteChecklist {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  item      String
+  ok        Boolean  @default(false)
+  ordre     Int      @default(0)
+  updatedAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("securite_checklist")
 }
 
 // Journal de chantier — rapports terrain (saisis offline, météo horodatée = justificatif contractuel).
