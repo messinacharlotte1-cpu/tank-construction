@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { UserCircle, Home, ArrowLeft, Printer } from "lucide-react";
-import { C, FONTS, Card, Kpi, Hazard, fcfa } from "@tank/ui";
+import { UserCircle, Home, ArrowLeft, Printer, Landmark, Smartphone, Building2 } from "lucide-react";
+import { C, FONTS, Card, Kpi, Hazard, Banner, SectionTitle, StatutBadge, btnGhost, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
 import { mensualite } from "../lib/calc";
+import PlanTypo from "./PlanTypo";
 
-type Resa = {
-  id: string; acquereur: string;
-  lots_immo: { reference: string; typologie: string | null; surface: number | null; prix: number; programmes: { nom: string; ville: string } | null } | null;
-};
+type Lot = { reference: string; typologie: string | null; surface: number | null; prix: number; bloc: string | null; niveau: string | null; programmeId: string; programmes: { nom: string; ville: string } | null };
+type Resa = { id: string; acquereur: string; lots_immo: Lot | null };
 type Appel = { id: string; libelle: string; montant: number; echeance: string | null; statut: string };
+type CatalogLot = { id: string; reference: string; typologie: string | null; surface: number | null; prix: number; bloc: string | null; niveau: string | null };
 
 const STATUT: Record<string, [string, string]> = { PREVU: ["Prévu", C.amber], EMIS: ["Émis", C.green], PAYE: ["Payé", C.steelSoft] };
 
@@ -17,11 +17,12 @@ export default function PortailAcquereur() {
   const [resas, setResas] = useState<Resa[]>([]);
   const [sel, setSel] = useState<Resa | null>(null);
   const [appels, setAppels] = useState<Appel[]>([]);
+  const [catalog, setCatalog] = useState<CatalogLot[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("reservations").select("id,acquereur,lots_immo(reference,typologie,surface,prix,programmes(nom,ville))");
+      const { data } = await supabase.from("reservations").select("id,acquereur,lots_immo(reference,typologie,surface,prix,bloc,niveau,programmeId,programmes(nom,ville))");
       setResas((data as unknown as Resa[]) ?? []);
       setLoading(false);
     })();
@@ -29,8 +30,14 @@ export default function PortailAcquereur() {
 
   async function openResa(r: Resa) {
     setSel(r);
+    setCatalog([]);
     const { data } = await supabase.from("appels_de_fonds").select("id,libelle,montant,echeance,statut").eq("reservationId", r.id).order("echeance");
     setAppels((data as Appel[]) ?? []);
+    // Catalogue : autres lots encore disponibles dans le même programme.
+    if (r.lots_immo?.programmeId) {
+      const { data: c } = await supabase.from("lots_immo").select("id,reference,typologie,surface,prix,bloc,niveau").eq("programmeId", r.lots_immo.programmeId).eq("statut", "DISPONIBLE").order("reference");
+      setCatalog((c as CatalogLot[]) ?? []);
+    }
   }
 
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
@@ -79,6 +86,41 @@ export default function PortailAcquereur() {
           </div>
         </Card>
 
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 3fr) minmax(240px, 2fr)", gap: 20, alignItems: "start" }}>
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: 20, display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ fontFamily: FONTS.condensed, fontSize: 22, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>Mon logement — {lot?.reference}</div>
+                <div style={{ fontSize: 12.5, color: C.steelSoft }}>{[lot?.typologie, lot?.bloc ? `Bloc ${lot.bloc}` : null, lot?.niveau, lot?.surface ? `${lot.surface} m²` : null].filter(Boolean).join(" · ")}</div>
+              </div>
+              <PlanTypo typologie={lot?.typologie} />
+              <div style={{ fontSize: 12, color: C.steelSoft }}>Plan indicatif de votre {lot?.typologie ?? "logement"}. Une demande de modification (TMA) ? Contactez votre conseiller — chaque échange reste tracé.</div>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle icon={Landmark}>Mon financement VEFA</SectionTitle>
+            {(() => {
+              const prochain = appels.find((a) => a.statut === "EMIS") ?? appels.find((a) => a.statut === "PREVU");
+              return (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {prochain ? (
+                    <Banner tone={prochain.statut === "EMIS" ? "warn" : "info"}>
+                      <b>Prochain appel :</b> {prochain.libelle} — <b>{fcfa(Number(prochain.montant))}</b>
+                      {prochain.echeance ? ` (échéance ${new Date(prochain.echeance).toLocaleDateString("fr-FR")})` : ""}.
+                      {prochain.statut === "EMIS" ? " Exigible — le jalon chantier a été constaté." : " À venir."}
+                    </Banner>
+                  ) : <div style={{ fontSize: 13, color: C.steelSoft }}>Aucun appel en attente.</div>}
+                  <button style={{ ...btnGhost, justifyContent: "center", color: C.orange, borderColor: C.orangeSoft }} title="Paiement mobile (à activer en production)">
+                    <Smartphone size={15} /> Payer par MTN MoMo / Orange Money
+                  </button>
+                  <div style={{ fontSize: 11, color: C.steelSoft }}>Chaque versement suit le contrat de réservation (loi n°97/003) : vous payez l'avancement réel, jamais avant. Reçus dans vos documents.</div>
+                </div>
+              );
+            })()}
+          </Card>
+        </div>
+
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ padding: "12px 16px", fontFamily: FONTS.condensed, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel }}>Échéancier des appels de fonds</div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -101,6 +143,28 @@ export default function PortailAcquereur() {
         </Card>
 
         <Simulateur prixLot={lot ? Number(lot.prix) : 0} />
+
+        {catalog.length > 0 && (
+          <Card>
+            <SectionTitle icon={Building2} action={<span style={{ fontSize: 12, color: C.steelSoft }}>{catalog.length} logement{catalog.length > 1 ? "s" : ""} disponible{catalog.length > 1 ? "s" : ""}</span>}>
+              Catalogue {lot?.programmes?.nom ?? ""} — encore disponible
+            </SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+              {catalog.map((c) => (
+                <div key={c.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 14, display: "grid", gap: 6, alignContent: "start" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <b style={{ fontFamily: FONTS.condensed, fontSize: 19, color: C.steel }}>{c.reference}</b>
+                    <StatutBadge s="Disponible" />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.steelSoft }}>{[c.typologie, c.surface ? `${c.surface} m²` : null, c.bloc ? `Bloc ${c.bloc}` : null].filter(Boolean).join(" · ")}</div>
+                  <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, color: C.orange }}>{fcfa(Number(c.prix))}</div>
+                  <div style={{ fontSize: 11.5, color: C.steelSoft }}>Apport 30 % : {fcfa(Math.round(Number(c.prix) * 0.3))}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: C.steelSoft, marginTop: 10 }}>Contactez l'équipe commerciale pour poser une option — le lot est bloqué 72 h, le temps de signer le contrat de réservation.</div>
+          </Card>
+        )}
       </div>
     );
   }

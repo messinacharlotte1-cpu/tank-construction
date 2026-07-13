@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Building2, MapPin, Trash2 } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, Hazard, Kpi, Progress, fcfa } from "@tank/ui";
+import { Plus, ArrowLeft, Building2, MapPin, Trash2, TrendingUp, Home } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { C, FONTS, Card, StatutBadge, Hazard, Kpi, Progress, SectionTitle, fcfa } from "@tank/ui";
+import { supabase, getTenant } from "../lib/supabase";
+import PlanTypo from "./PlanTypo";
 
 // Seuil de pré-commercialisation exigé par la banque pour débloquer le crédit promoteur.
 const SEUIL_PRECO = 50;
-import { supabase, getTenant } from "../lib/supabase";
 
 type Programme = { id: string; nom: string; ville: string };
 type LotImmo = { id: string; reference: string; bloc: string | null; niveau: string | null; typologie: string | null; surface: number | null; prix: number; statut: string };
@@ -75,12 +77,17 @@ export default function ProgrammesLive() {
 
 function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: () => void }) {
   const [lots, setLots] = useState<LotImmo[]>([]);
+  const [resaDates, setResaDates] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState({ reference: "", typologie: "", surface: "", prix: "" });
+  const [typoPlan, setTypoPlan] = useState<string | null>(null);
 
   async function load() {
     const { data, error } = await supabase.from("lots_immo").select("id,reference,bloc,niveau,typologie,surface,prix,statut").eq("programmeId", programme.id).order("reference");
     if (error) setErr(error.message); else setLots((data as LotImmo[]) ?? []);
+    // Dates de réservation (cumul des ventes dans le temps) — via les lots du programme.
+    const { data: resas } = await supabase.from("reservations").select("date,lots_immo!inner(programmeId)").eq("lots_immo.programmeId", programme.id);
+    setResaDates(((resas as unknown as { date: string }[]) ?? []).map((r) => r.date).filter(Boolean));
   }
   useEffect(() => { void load(); }, [programme.id]);
 
@@ -105,6 +112,26 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
   const caTotal = lots.reduce((s, l) => s + Number(l.prix), 0);
   const caSecurise = lots.filter((l) => l.statut !== "DISPONIBLE").reduce((s, l) => s + Number(l.prix), 0);
   const precoPct = lots.length ? Math.round(((vendus + reserves) / lots.length) * 100) : 0;
+
+  // Écoulement % par typologie (réel).
+  const typos = [...new Set(lots.map((l) => l.typologie || "—"))];
+  const typoData = typos.map((t) => {
+    const ls = lots.filter((l) => (l.typologie || "—") === t);
+    const e = ls.filter((l) => l.statut !== "DISPONIBLE").length;
+    return { nom: t, "Écoulé %": ls.length ? Math.round((e / ls.length) * 100) : 0 };
+  });
+  // Ventes + réservations cumulées par mois (à partir des dates de réservation réelles).
+  const ventesData = (() => {
+    const byMonth = new Map<string, number>();
+    for (const d of resaDates) { const m = new Date(d).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }); byMonth.set(m, (byMonth.get(m) ?? 0) + 1); }
+    const months = [...byMonth.entries()].sort((a, b) => new Date("1 " + a[0]).getTime() - new Date("1 " + b[0]).getTime());
+    let cumul = 0;
+    return months.map(([mois, n]) => ({ mois, cumul: (cumul += n) }));
+  })();
+  const rythme = ventesData.length > 1 ? Math.round((ventesData.at(-1)!.cumul / ventesData.length) * 10) / 10 : ventesData.length ? ventesData[0].cumul : 0;
+  const stockMois = rythme > 0 ? Math.ceil(dispos / rythme) : "—";
+  const planTypos = typos.filter((t) => t !== "—");
+  const planActive = typoPlan ?? planTypos[0] ?? null;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -185,6 +212,61 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
         ))}
         {lots.length === 0 && <div style={{ color: C.steelSoft }}>Aucun lot.</div>}
       </div>
+
+      {lots.length > 0 && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+            <Card style={{ padding: 16 }}><Kpi label="Rythme de vente moyen" value={<>{rythme}<span style={{ fontSize: 14, color: C.steelSoft }}> lots/mois</span></>} /></Card>
+            <Card style={{ padding: 16 }}><Kpi label="Écoulement du stock restant" value={<>{stockMois}<span style={{ fontSize: 14, color: C.steelSoft }}> mois</span></>} sub="au rythme actuel" /></Card>
+            <Card style={{ padding: 16 }}><Kpi label="Pré-commercialisation" value={`${precoPct} %`} color={precoPct >= SEUIL_PRECO ? C.green : C.amber} /></Card>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+            <Card>
+              <SectionTitle icon={TrendingUp}>Ventes + réservations cumulées</SectionTitle>
+              {ventesData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={210}>
+                  <LineChart data={ventesData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+                    <XAxis dataKey="mois" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="cumul" name="Lots écoulés" stroke={C.orange} strokeWidth={3} dot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : <div style={{ fontSize: 13, color: C.steelSoft, padding: "20px 0" }}>Aucune réservation datée pour l'instant.</div>}
+            </Card>
+            <Card>
+              <SectionTitle icon={Building2}>Écoulement par typologie (%)</SectionTitle>
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={typoData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+                  <XAxis dataKey="nom" tick={{ fontSize: 12 }} />
+                  <YAxis unit=" %" tick={{ fontSize: 12 }} domain={[0, 100]} />
+                  <Tooltip formatter={(v) => `${v} %`} />
+                  <Bar dataKey="Écoulé %" fill={C.orange} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+
+          {planActive && (
+            <Card>
+              <SectionTitle icon={Home} action={
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {planTypos.map((t) => (
+                    <button key={t} onClick={() => setTypoPlan(t)} style={{ padding: "5px 11px", fontSize: 12, borderRadius: 8, border: `1px solid ${planActive === t ? C.steel : C.line}`, cursor: "pointer", fontWeight: 600, background: planActive === t ? C.steel : "transparent", color: planActive === t ? C.white : C.steelSoft }}>{t}</button>
+                  ))}
+                </div>
+              }>Plans des logements — {planActive}</SectionTitle>
+              <div style={{ maxWidth: 560 }}><PlanTypo typologie={planActive} /></div>
+              <div style={{ fontSize: 12, color: C.steelSoft, marginTop: 8 }}>
+                Plan indicatif de la typologie. En production : fichiers de l'architecte (PDF/DWG), annotables par les acquéreurs — chaque demande de TMA naît d'un commentaire localisé sur le plan.
+              </div>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }
