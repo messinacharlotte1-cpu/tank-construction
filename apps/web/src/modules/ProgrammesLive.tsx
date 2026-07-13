@@ -81,6 +81,10 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState({ reference: "", typologie: "", surface: "", prix: "" });
   const [typoPlan, setTypoPlan] = useState<string | null>(null);
+  const [tab, setTab] = useState("masse");
+  const [lotSel, setLotSel] = useState<string | null>(null);
+  const [filtre, setFiltre] = useState("Tous");
+  const [blocSel, setBlocSel] = useState<string | null>(null);
 
   async function load() {
     const { data, error } = await supabase.from("lots_immo").select("id,reference,bloc,niveau,typologie,surface,prix,statut").eq("programmeId", programme.id).order("reference");
@@ -132,6 +136,21 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
   const stockMois = rythme > 0 ? Math.ceil(dispos / rythme) : "—";
   const planTypos = typos.filter((t) => t !== "—");
   const planActive = typoPlan ?? planTypos[0] ?? null;
+  const blocs = [...new Set(lots.map((l) => l.bloc).filter(Boolean))] as string[];
+  const visibles = lots.filter((l) => (filtre === "Tous" || (l.typologie || "—") === filtre) && (!blocSel || l.bloc === blocSel));
+  const sel = lots.find((l) => l.id === lotSel);
+  const couleurs: Record<string, string> = { VENDU: C.steelSoft, RESERVE: C.amber, DISPONIBLE: C.green };
+  const TABS = [
+    { id: "masse", label: "Plan masse" },
+    { id: "lots", label: "Grille des lots" },
+    { id: "plans", label: "Plans des logements" },
+    { id: "commercial", label: "Commercialisation" },
+  ];
+  async function reserver(l: LotImmo) {
+    if (l.statut !== "DISPONIBLE") return;
+    setLots((r) => r.map((x) => (x.id === l.id ? { ...x, statut: "RESERVE" } : x)));
+    await supabase.from("lots_immo").update({ statut: "RESERVE" }).eq("id", l.id);
+  }
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -159,68 +178,143 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
               <div style={{ fontSize: 11, color: C.steelSoft, marginTop: 4 }}>Seuil bancaire de déblocage : {SEUIL_PRECO} % {precoPct >= SEUIL_PRECO ? "✓ atteint" : "— à atteindre"}</div>
             </div>
           )}
+          <div style={{ display: "flex", gap: 4, marginTop: 16, borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
+            {TABS.map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONTS.sans, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, color: tab === t.id ? C.orange : C.steelSoft, borderBottom: `3px solid ${tab === t.id ? C.orange : "transparent"}` }}>{t.label}</button>
+            ))}
+          </div>
         </div>
       </Card>
-      <Card>
-        <form onSubmit={addLot} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1.4fr auto", gap: 10 }}>
-          <input style={input} placeholder="Référence (L-A101)" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} required />
-          <input style={input} placeholder="Typologie (T3…)" value={form.typologie} onChange={(e) => setForm({ ...form, typologie: e.target.value })} />
-          <input style={input} placeholder="Surface m²" type="number" value={form.surface} onChange={(e) => setForm({ ...form, surface: e.target.value })} />
-          <input style={input} placeholder="Prix FCFA" type="number" value={form.prix} onChange={(e) => setForm({ ...form, prix: e.target.value })} />
-          <button type="submit" style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer" }}>Lot</button>
-        </form>
-      </Card>
 
-      {lots.length > 0 && (
-        <Card>
-          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 10 }}>Plan de masse</div>
-          <svg viewBox={`0 0 ${5 * 110} ${Math.ceil(lots.length / 5) * 80}`} style={{ width: "100%", maxWidth: 560 }}>
-            {lots.map((l, i) => {
-              const col = i % 5, row = Math.floor(i / 5);
-              const fill = l.statut === "VENDU" ? C.steelSoft : l.statut === "RESERVE" ? C.amber : C.green;
-              return (
-                <g key={l.id} onClick={() => cycle(l)} style={{ cursor: "pointer" }}>
-                  <rect x={col * 110 + 6} y={row * 80 + 6} width={98} height={64} rx={8} fill={fill} opacity={0.9} />
-                  <text x={col * 110 + 55} y={row * 80 + 34} textAnchor="middle" fill="#fff" fontSize={13} fontWeight={700}>{l.reference}</text>
-                  <text x={col * 110 + 55} y={row * 80 + 52} textAnchor="middle" fill="#fff" fontSize={10}>{l.typologie ?? ""}</text>
-                </g>
-              );
-            })}
-          </svg>
-          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: C.steelSoft }}>
-            <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.green, borderRadius: 2, marginRight: 4 }} />Disponible</span>
-            <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.amber, borderRadius: 2, marginRight: 4 }} />Réservé</span>
-            <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.steelSoft, borderRadius: 2, marginRight: 4 }} />Vendu</span>
-            <span style={{ marginLeft: "auto" }}>Cliquer un lot = changer le statut</span>
-          </div>
-        </Card>
+      {tab === "masse" && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 3fr) minmax(240px, 2fr)", gap: 20, alignItems: "start" }}>
+          <Card>
+            <SectionTitle icon={MapPin}>Plan masse — cliquez sur un lot pour changer son statut</SectionTitle>
+            {lots.length > 0 ? (
+              <svg viewBox={`0 0 ${5 * 110} ${Math.ceil(lots.length / 5) * 80}`} style={{ width: "100%" }}>
+                {lots.map((l, i) => {
+                  const col = i % 5, row = Math.floor(i / 5);
+                  return (
+                    <g key={l.id} onClick={() => cycle(l)} style={{ cursor: "pointer" }}>
+                      <rect x={col * 110 + 6} y={row * 80 + 6} width={98} height={64} rx={8} fill={couleurs[l.statut]} opacity={lotSel === l.id ? 1 : 0.9} stroke={lotSel === l.id ? C.steel : "none"} strokeWidth={2} />
+                      <text x={col * 110 + 55} y={row * 80 + 34} textAnchor="middle" fill="#fff" fontSize={13} fontWeight={700}>{l.reference}</text>
+                      <text x={col * 110 + 55} y={row * 80 + 52} textAnchor="middle" fill="#fff" fontSize={10}>{l.typologie ?? ""}</text>
+                    </g>
+                  );
+                })}
+              </svg>
+            ) : <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun lot. Ajoutez-en dans « Grille des lots ».</div>}
+            <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: C.steelSoft, flexWrap: "wrap" }}>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.green, borderRadius: 2, marginRight: 4 }} />Disponible</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.amber, borderRadius: 2, marginRight: 4 }} />Réservé</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.steelSoft, borderRadius: 2, marginRight: 4 }} />Vendu</span>
+            </div>
+          </Card>
+          <Card>
+            <SectionTitle icon={Building2}>Répartition par typologie</SectionTitle>
+            <div style={{ display: "grid", gap: 10 }}>
+              {planTypos.map((t) => {
+                const ls = lots.filter((l) => (l.typologie || "—") === t);
+                const e = ls.filter((l) => l.statut !== "DISPONIBLE").length;
+                return (
+                  <div key={t}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
+                      <span><b>{t}</b> · {ls.length} lots</span>
+                      <span style={{ color: C.steelSoft }}>{e}/{ls.length} écoulés</span>
+                    </div>
+                    <Progress pct={ls.length ? Math.round((e / ls.length) * 100) : 0} />
+                  </div>
+                );
+              })}
+              {planTypos.length === 0 && <div style={{ fontSize: 13, color: C.steelSoft }}>Renseignez la typologie des lots.</div>}
+            </div>
+          </Card>
+        </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
-        {lots.map((l) => (
-          <Card key={l.id}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <b style={{ color: C.steel }}>{l.reference}</b>
-              <button onClick={() => del(l.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={14} /></button>
+      {tab === "lots" && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 3fr) minmax(250px, 2fr)", gap: 20, alignItems: "start" }}>
+          <Card>
+            <SectionTitle icon={Building2} action={
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["Tous", ...planTypos].map((t) => (
+                  <button key={t} onClick={() => setFiltre(t)} style={{ padding: "5px 11px", fontSize: 12, borderRadius: 8, border: `1px solid ${filtre === t ? C.steel : C.line}`, cursor: "pointer", fontWeight: 600, background: filtre === t ? C.steel : "transparent", color: filtre === t ? C.white : C.steelSoft }}>{t}</button>
+                ))}
+                {blocs.map((b) => (
+                  <button key={b} onClick={() => setBlocSel(blocSel === b ? null : b)} style={{ padding: "5px 11px", fontSize: 12, borderRadius: 8, border: `1px solid ${blocSel === b ? C.orange : C.line}`, cursor: "pointer", fontWeight: 600, background: blocSel === b ? C.orange : "transparent", color: blocSel === b ? C.white : C.steelSoft }}>Bloc {b}</button>
+                ))}
+              </div>
+            }>Grille des lots ({visibles.length})</SectionTitle>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {visibles.map((l) => (
+                <button key={l.id} onClick={() => setLotSel(l.id)} title={`${l.reference} · ${STATUT_LABEL[l.statut] ?? l.statut}`} style={{ minWidth: 62, height: 40, borderRadius: 6, cursor: "pointer", fontFamily: FONTS.condensed, fontSize: 12, fontWeight: 700, border: lotSel === l.id ? `2px solid ${C.steel}` : `1px solid ${C.line}`, background: couleurs[l.statut], color: l.statut === "DISPONIBLE" ? C.steel : C.white, display: "grid", lineHeight: 1.1, padding: "2px 4px" }}>
+                  <span>{l.reference}</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, opacity: 0.85 }}>{[l.bloc, l.niveau].filter(Boolean).join("·") || (l.typologie ?? "")}</span>
+                </button>
+              ))}
+              {visibles.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun lot pour ce filtre.</div>}
             </div>
-            <div style={{ fontSize: 13, color: C.steelSoft, marginTop: 4 }}>{[l.typologie, l.surface ? l.surface + " m²" : null].filter(Boolean).join(" · ")}</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.steel, marginTop: 6 }}>{fcfa(Number(l.prix))}</div>
-            <button onClick={() => cycle(l)} title="Changer le statut" style={{ marginTop: 10, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-              <StatutBadge s={STATUT_LABEL[l.statut] ?? l.statut} />
-            </button>
+            <form onSubmit={addLot} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1.4fr auto", gap: 8, marginTop: 16 }}>
+              <input style={input} placeholder="Référence (L-A101)" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} required />
+              <input style={input} placeholder="Typologie (T3…)" value={form.typologie} onChange={(e) => setForm({ ...form, typologie: e.target.value })} />
+              <input style={input} placeholder="Surface m²" type="number" value={form.surface} onChange={(e) => setForm({ ...form, surface: e.target.value })} />
+              <input style={input} placeholder="Prix FCFA" type="number" value={form.prix} onChange={(e) => setForm({ ...form, prix: e.target.value })} />
+              <button type="submit" style={{ padding: "9px 14px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer" }}><Plus size={15} /></button>
+            </form>
           </Card>
-        ))}
-        {lots.length === 0 && <div style={{ color: C.steelSoft }}>Aucun lot.</div>}
-      </div>
 
-      {lots.length > 0 && (
+          <Card>
+            <SectionTitle icon={Home}>Fiche du lot</SectionTitle>
+            {sel ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontFamily: FONTS.condensed, fontSize: 26, fontWeight: 700, color: C.steel }}>{sel.reference}</div>
+                  <StatutBadge s={STATUT_LABEL[sel.statut] ?? sel.statut} />
+                </div>
+                <PlanTypo typologie={sel.typologie} />
+                <div style={{ fontSize: 13.5, color: C.steel, display: "grid", gap: 5 }}>
+                  {(sel.bloc || sel.niveau) && <div>{sel.bloc ? <>Bloc <b>{sel.bloc}</b></> : null}{sel.niveau ? <> · Niveau <b>{sel.niveau}</b></> : null}</div>}
+                  <div>Typologie <b>{sel.typologie ?? "—"}</b>{sel.surface ? <> · Surface <b>{sel.surface} m²</b></> : null}</div>
+                  <div>Prix TTC : <b style={{ color: C.orange }}>{fcfa(Number(sel.prix))}</b></div>
+                  <div>Apport réservation (30 %) : <b>{fcfa(Math.round(Number(sel.prix) * 0.3))}</b></div>
+                </div>
+                <div style={{ display: "grid", gap: 8, marginTop: 4 }}>
+                  {sel.statut === "DISPONIBLE" && (
+                    <button onClick={() => reserver(sel)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: C.orange, color: C.white, border: "none", borderRadius: 8, padding: "9px 14px", fontWeight: 700, cursor: "pointer", fontFamily: FONTS.sans }}>Poser une option / Réserver</button>
+                  )}
+                  <button onClick={() => del(sel.id)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", color: C.red, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 13 }}><Trash2 size={14} /> Supprimer le lot</button>
+                </div>
+              </div>
+            ) : <div style={{ fontSize: 13, color: C.steelSoft }}>Sélectionnez un lot pour afficher son plan, sa fiche, le réserver ou le supprimer.</div>}
+          </Card>
+        </div>
+      )}
+
+      {tab === "plans" && (
+        planActive ? (
+          <Card>
+            <SectionTitle icon={Home} action={
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {planTypos.map((t) => (
+                  <button key={t} onClick={() => setTypoPlan(t)} style={{ padding: "5px 11px", fontSize: 12, borderRadius: 8, border: `1px solid ${planActive === t ? C.steel : C.line}`, cursor: "pointer", fontWeight: 600, background: planActive === t ? C.steel : "transparent", color: planActive === t ? C.white : C.steelSoft }}>{t}</button>
+                ))}
+              </div>
+            }>Plans des logements — {planActive}</SectionTitle>
+            <div style={{ maxWidth: 560 }}><PlanTypo typologie={planActive} /></div>
+            <div style={{ fontSize: 12, color: C.steelSoft, marginTop: 8 }}>
+              Plan indicatif de la typologie. En production : fichiers de l'architecte (PDF/DWG), annotables par les acquéreurs — chaque demande de TMA naît d'un commentaire localisé sur le plan.
+            </div>
+          </Card>
+        ) : <Card><div style={{ fontSize: 13, color: C.steelSoft }}>Renseignez la typologie des lots pour afficher les plans.</div></Card>
+      )}
+
+      {tab === "commercial" && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
             <Card style={{ padding: 16 }}><Kpi label="Rythme de vente moyen" value={<>{rythme}<span style={{ fontSize: 14, color: C.steelSoft }}> lots/mois</span></>} /></Card>
             <Card style={{ padding: 16 }}><Kpi label="Écoulement du stock restant" value={<>{stockMois}<span style={{ fontSize: 14, color: C.steelSoft }}> mois</span></>} sub="au rythme actuel" /></Card>
             <Card style={{ padding: 16 }}><Kpi label="Pré-commercialisation" value={`${precoPct} %`} color={precoPct >= SEUIL_PRECO ? C.green : C.amber} /></Card>
           </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
             <Card>
               <SectionTitle icon={TrendingUp}>Ventes + réservations cumulées</SectionTitle>
@@ -249,22 +343,6 @@ function ProgrammeDetail({ programme, onBack }: { programme: Programme; onBack: 
               </ResponsiveContainer>
             </Card>
           </div>
-
-          {planActive && (
-            <Card>
-              <SectionTitle icon={Home} action={
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {planTypos.map((t) => (
-                    <button key={t} onClick={() => setTypoPlan(t)} style={{ padding: "5px 11px", fontSize: 12, borderRadius: 8, border: `1px solid ${planActive === t ? C.steel : C.line}`, cursor: "pointer", fontWeight: 600, background: planActive === t ? C.steel : "transparent", color: planActive === t ? C.white : C.steelSoft }}>{t}</button>
-                  ))}
-                </div>
-              }>Plans des logements — {planActive}</SectionTitle>
-              <div style={{ maxWidth: 560 }}><PlanTypo typologie={planActive} /></div>
-              <div style={{ fontSize: 12, color: C.steelSoft, marginTop: 8 }}>
-                Plan indicatif de la typologie. En production : fichiers de l'architecte (PDF/DWG), annotables par les acquéreurs — chaque demande de TMA naît d'un commentaire localisé sur le plan.
-              </div>
-            </Card>
-          )}
         </>
       )}
     </div>
