@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
-import { HardHat, CircleDollarSign, FileText, Package, AlertTriangle, ChevronRight, CloudSun } from "lucide-react";
+import { HardHat, Users, CircleDollarSign, FileText, AlertTriangle, ChevronRight, CloudRain, TrendingUp } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
-import { C, FONTS, Card, fcfa } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Kpi = { label: string; val: string | number; sub: string; icon: typeof HardHat; alert?: boolean };
 type Alerte = { t: string; page: string };
 type Ch = { nom: string; statut: string; budget: number; consomme: number; avancementPrevu: number; avancementReel: number };
-
-const STATUT_LABEL: Record<string, string> = { EN_PREPARATION: "En préparation", EN_COURS: "En cours", EN_RETARD: "En retard", SUSPENDU: "Suspendu", TERMINE: "Terminé" };
+type Pt = { ouvrier: string; statut: string; date: string };
 
 export default function Dashboard({ go }: { go?: (id: string) => void }) {
   const [kpis, setKpis] = useState<Kpi[]>([]);
@@ -19,29 +18,36 @@ export default function Dashboard({ go }: { go?: (id: string) => void }) {
 
   useEffect(() => {
     (async () => {
-      const [{ data: ch }, { data: fa }, { data: ar }] = await Promise.all([
+      const [{ data: ch }, { data: fa }, { data: ar }, { data: pt }] = await Promise.all([
         supabase.from("chantiers").select("nom,statut,budget,consomme,avancementPrevu,avancementReel"),
         supabase.from("factures").select("ttc,statut"),
         supabase.from("articles").select("designation,stock,seuil"),
+        supabase.from("pointages").select("ouvrier,statut,date"),
       ]);
       const chantiers = (ch as Ch[]) ?? [];
       const factures = fa ?? [];
       const articles = ar ?? [];
+      const pointages = (pt as Pt[]) ?? [];
       const actifs = chantiers.filter((c) => c.statut === "EN_COURS").length;
       const retards = chantiers.filter((c) => c.statut === "EN_RETARD");
       const budget = chantiers.reduce((s, c) => s + Number(c.budget), 0);
       const conso = chantiers.reduce((s, c) => s + Number(c.consomme), 0);
       const impayees = factures.filter((f) => f.statut === "Impayée");
       const sousSeuil = articles.filter((a) => Number(a.stock) < Number(a.seuil));
+      // Présents aujourd'hui : P=1, DM=0.5 (comme la maquette).
+      const today = new Date().toISOString().slice(0, 10);
+      const ptToday = pointages.filter((p) => (p.date ?? "").slice(0, 10) === today);
+      const presents = ptToday.filter((p) => p.statut === "P").length + ptToday.filter((p) => p.statut === "DM").length * 0.5;
+      const totalOuvriers = new Set(pointages.map((p) => p.ouvrier)).size;
 
       setKpis([
         { label: "Chantiers actifs", val: actifs, sub: `${retards.length} en retard`, icon: HardHat, alert: retards.length > 0 },
+        { label: "Présents aujourd'hui", val: presents, sub: `sur ${totalOuvriers} ouvriers`, icon: Users },
         { label: "Budget consommé", val: budget ? `${Math.round((conso / budget) * 100)} %` : "—", sub: fcfa(conso), icon: CircleDollarSign },
         { label: "Factures impayées", val: impayees.length, sub: fcfa(impayees.reduce((s, f) => s + Number(f.ttc), 0)), icon: FileText, alert: impayees.length > 0 },
-        { label: "Articles sous seuil", val: sousSeuil.length, sub: `sur ${articles.length} réf.`, icon: Package, alert: sousSeuil.length > 0 },
       ]);
       setAlertes([
-        ...retards.map((c) => ({ t: `Chantier en retard : ${c.nom} (${c.avancementReel}% réalisé)`, page: "chantiers" })),
+        ...retards.map((c) => ({ t: `Chantier en retard : ${c.nom} (${c.avancementReel} % réalisé)`, page: "chantiers" })),
         ...sousSeuil.map((a) => ({ t: `Stock sous seuil : ${a.designation} (${a.stock})`, page: "stocks" })),
         ...impayees.map((f) => ({ t: `Facture impayée : ${fcfa(Number(f.ttc))}`, page: "factures" })),
       ]);
@@ -56,9 +62,9 @@ export default function Dashboard({ go }: { go?: (id: string) => void }) {
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
         {kpis.map((k, i) => (
-          <Card key={i} style={{ padding: 18 }}>
+          <Card key={i} style={{ padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft, textTransform: "uppercase", letterSpacing: 0.6 }}>{k.label}</div>
@@ -71,10 +77,21 @@ export default function Dashboard({ go }: { go?: (id: string) => void }) {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
         <Card>
-          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 12 }}>Budget prévu / consommé (M FCFA)</div>
-          <ResponsiveContainer width="100%" height={240}>
+          <SectionTitle icon={TrendingUp}>Avancement prévu / réel (%)</SectionTitle>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={avancData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
+              <XAxis dataKey="nom" tick={{ fontSize: 11 }} /><YAxis unit=" %" tick={{ fontSize: 11 }} /><Tooltip /><Legend />
+              <Bar dataKey="Prévu" fill={C.steelSoft} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Réel" fill={C.orange} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card>
+          <SectionTitle icon={CircleDollarSign}>Budget par chantier (M FCFA)</SectionTitle>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart data={budgetData}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
               <XAxis dataKey="nom" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend />
@@ -83,38 +100,30 @@ export default function Dashboard({ go }: { go?: (id: string) => void }) {
             </BarChart>
           </ResponsiveContainer>
         </Card>
+      </div>
 
-        <Card>
-          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><AlertTriangle size={16} color={C.orange} /> Alertes</div>
-          {alertes.length === 0 ? <div style={{ color: C.green, fontSize: 14 }}>✔ Aucune alerte.</div> : (
-            <div style={{ display: "grid", gap: 8 }}>
-              {alertes.map((a, i) => (
-                <button key={i} onClick={() => go?.(a.page)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, textAlign: "left", background: C.redSoft, border: "none", borderRadius: 8, padding: "9px 11px", cursor: "pointer", color: C.steel, fontSize: 13 }}>
-                  <span>{a.t}</span><ChevronRight size={15} color={C.red} />
-                </button>
-              ))}
+      <div onClick={() => go?.("meteo")} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, cursor: "pointer", background: C.white, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 18px" }}>
+        <CloudRain size={26} color="#3B82C4" />
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.steel }}>Météo Yaoundé — nuageux, 28° / pluie 40 %</div>
+          <div style={{ fontSize: 12, color: C.red }}>Risque d'averses en après-midi — bétonnage à planifier le matin.</div>
+        </div>
+        <ChevronRight size={16} color={C.steelSoft} />
+      </div>
+
+      <Card>
+        <SectionTitle icon={AlertTriangle} action={<span style={{ fontSize: 12, color: C.steelSoft }}>{alertes.length} alerte{alertes.length > 1 ? "s" : ""}</span>}>Alertes critiques</SectionTitle>
+        <div style={{ display: "grid", gap: 8 }}>
+          {alertes.map((a, i) => (
+            <div key={i} onClick={() => go?.(a.page)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: C.redSoft, borderLeft: `4px solid ${C.red}`, borderRadius: 8, cursor: "pointer", fontSize: 14, color: C.steel }}>
+              <AlertTriangle size={16} color={C.red} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>{a.t}</span>
+              <ChevronRight size={16} color={C.steelSoft} />
             </div>
-          )}
-        </Card>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
-        <Card>
-          <div style={{ fontFamily: FONTS.condensed, fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 12 }}>Avancement prévu / réel (%)</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={avancData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-              <XAxis dataKey="nom" tick={{ fontSize: 11 }} /><YAxis unit="%" tick={{ fontSize: 11 }} /><Tooltip /><Legend />
-              <Bar dataKey="Prévu" fill={C.steelSoft} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Réel" fill={C.green} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}><CloudSun size={40} color={C.orange} /><div><div style={{ fontFamily: FONTS.condensed, fontSize: 30, fontWeight: 700, color: C.steel }}>28°</div><div style={{ fontSize: 13, color: C.steelSoft }}>Yaoundé — nuageux</div></div></div>
-          <div style={{ fontSize: 12, color: C.steelSoft }}>Météo du jour (indicatif). Détail dans Opérations → Météo.</div>
-        </Card>
-      </div>
+          ))}
+          {alertes.length === 0 && <div style={{ color: C.steelSoft, fontSize: 14 }}>Aucune alerte. Tous les indicateurs sont au vert.</div>}
+        </div>
+      </Card>
     </div>
   );
 }
