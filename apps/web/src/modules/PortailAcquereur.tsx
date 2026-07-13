@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { UserCircle, Home, ArrowLeft, Printer, Landmark, Smartphone, Building2 } from "lucide-react";
-import { C, FONTS, Card, Kpi, Hazard, Banner, SectionTitle, StatutBadge, btnGhost, fcfa } from "@tank/ui";
+import { UserCircle, Home, ArrowLeft, Printer, Landmark, Smartphone, Building2, FileText, Image as ImageIcon } from "lucide-react";
+import { C, FONTS, Card, Kpi, Hazard, Banner, SectionTitle, StatutBadge, Progress, btnGhost, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
 import { mensualite } from "../lib/calc";
@@ -10,20 +10,32 @@ type Lot = { reference: string; typologie: string | null; surface: number | null
 type Resa = { id: string; acquereur: string; lots_immo: Lot | null };
 type Appel = { id: string; libelle: string; montant: number; echeance: string | null; statut: string };
 type CatalogLot = { id: string; reference: string; typologie: string | null; surface: number | null; prix: number; bloc: string | null; niveau: string | null };
+type ChantierMO = { id: string; nom: string; client: string; ville: string; statut: string; avancementReel: number; avancementPrevu: number; fin: string | null };
 
 const STATUT: Record<string, [string, string]> = { PREVU: ["Prévu", C.amber], EMIS: ["Émis", C.green], PAYE: ["Payé", C.steelSoft] };
 
+const ST_CH: Record<string, string> = { EN_PREPARATION: "En préparation", EN_COURS: "En cours", EN_RETARD: "En retard", SUSPENDU: "Suspendu", TERMINE: "Terminé" };
+
 export default function PortailAcquereur() {
+  const [espace, setEspace] = useState<"chantier" | "acquereur">("acquereur");
   const [resas, setResas] = useState<Resa[]>([]);
   const [sel, setSel] = useState<Resa | null>(null);
   const [appels, setAppels] = useState<Appel[]>([]);
   const [catalog, setCatalog] = useState<CatalogLot[]>([]);
+  const [chantiers, setChantiers] = useState<ChantierMO[]>([]);
+  const [chSel, setChSel] = useState<ChantierMO | null>(null);
+  const [chMedias, setChMedias] = useState<{ id: string; nom: string; url: string }[]>([]);
+  const [chFactures, setChFactures] = useState<{ id: string; numero: string; ttc: number; statut: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("reservations").select("id,acquereur,lots_immo(reference,typologie,surface,prix,bloc,niveau,programmeId,programmes(nom,ville))");
-      setResas((data as unknown as Resa[]) ?? []);
+      const [r, c] = await Promise.all([
+        supabase.from("reservations").select("id,acquereur,lots_immo(reference,typologie,surface,prix,bloc,niveau,programmeId,programmes(nom,ville))"),
+        supabase.from("chantiers").select("id,nom,client,ville,statut,avancementReel,avancementPrevu,fin"),
+      ]);
+      setResas((r.data as unknown as Resa[]) ?? []);
+      setChantiers((c.data as ChantierMO[]) ?? []);
       setLoading(false);
     })();
   }, []);
@@ -40,7 +52,111 @@ export default function PortailAcquereur() {
     }
   }
 
+  async function openChantier(c: ChantierMO) {
+    setChSel(c);
+    const [m, f] = await Promise.all([
+      supabase.from("medias").select("id,nom,url").eq("chantier", c.nom).order("createdAt", { ascending: false }),
+      supabase.from("factures").select("id,numero,ttc,statut").eq("client", c.client).order("numero", { ascending: false }),
+    ]);
+    setChMedias((m.data as { id: string; nom: string; url: string }[]) ?? []);
+    setChFactures((f.data as { id: string; numero: string; ttc: number; statut: string }[]) ?? []);
+  }
+
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
+
+  const switcher = (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, background: C.steel, color: C.white, borderRadius: 10, padding: "12px 16px", fontSize: 14 }}>
+      <UserCircle size={18} color={C.orange} />
+      <span style={{ flex: 1, minWidth: 220 }}><b>Portail client — lecture seule.</b> Deux profils : le maître d'ouvrage d'un chantier (suivi, médias, factures) et l'acquéreur d'un lot en VEFA (son logement, son échéancier, le catalogue).</span>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={() => { setEspace("chantier"); setSel(null); }} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12, background: espace === "chantier" ? C.orange : "transparent", color: C.white, borderColor: espace === "chantier" ? C.orange : C.steelSoft }}>Maître d'ouvrage</button>
+        <button onClick={() => { setEspace("acquereur"); setChSel(null); }} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12, background: espace === "acquereur" ? C.orange : "transparent", color: C.white, borderColor: espace === "acquereur" ? C.orange : C.steelSoft }}>Acquéreur</button>
+      </div>
+    </div>
+  );
+
+  // ── Espace Maître d'ouvrage ──────────────────────────────
+  if (espace === "chantier") {
+    if (chSel) {
+      const enRetard = Number(chSel.avancementReel) < Number(chSel.avancementPrevu) - 5;
+      return (
+        <div style={{ display: "grid", gap: 20 }}>
+          {switcher}
+          <button onClick={() => setChSel(null)} style={{ justifySelf: "start", display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: C.steel }}><ArrowLeft size={15} /> Retour</button>
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <Hazard />
+            <div style={{ padding: 20 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                  <h2 style={{ margin: 0, fontFamily: FONTS.condensed, fontSize: 28, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{chSel.nom}</h2>
+                  <div style={{ fontSize: 13, color: C.steelSoft, marginTop: 4 }}>{chSel.client} · {chSel.ville}{chSel.fin ? ` · Livraison prévue : ${new Date(chSel.fin).toLocaleDateString("fr-FR")}` : ""}</div>
+                </div>
+                <StatutBadge s={ST_CH[chSel.statut] ?? chSel.statut} />
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.steelSoft, marginBottom: 4 }}>
+                  <span>Avancement global des travaux</span>
+                  <b style={{ color: enRetard ? C.red : C.steel }}>{chSel.avancementReel} %</b>
+                </div>
+                <Progress pct={Number(chSel.avancementReel)} color={enRetard ? C.red : C.orange} />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle icon={ImageIcon}>Plans & photos du chantier</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+              {chMedias.map((m) => (
+                <div key={m.id} style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line}` }}>
+                  <img src={m.url} alt={m.nom} style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
+                  <div style={{ padding: "8px 10px", fontSize: 12, color: C.steel }}>{m.nom}</div>
+                </div>
+              ))}
+              {chMedias.length === 0 && <div style={{ fontSize: 13, color: C.steelSoft }}>Aucun plan/photo partagé.</div>}
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle icon={FileText}>Devis &amp; factures</SectionTitle>
+            <div style={{ display: "grid", gap: 8 }}>
+              {chFactures.map((f) => (
+                <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 12px", border: `1px solid ${C.line}`, borderRadius: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.steel }}>{f.numero}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <b style={{ fontSize: 13 }}>{fcfa(Number(f.ttc))}</b>
+                    <StatutBadge s={f.statut} />
+                  </div>
+                </div>
+              ))}
+              {chFactures.length === 0 && <div style={{ fontSize: 13, color: C.steelSoft }}>Aucune facture pour ce client.</div>}
+            </div>
+          </Card>
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: "grid", gap: 20 }}>
+        {switcher}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+          {chantiers.map((c) => (
+            <Card key={c.id} style={{ cursor: "pointer" }}>
+              <div onClick={() => openChantier(c)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <div style={{ fontFamily: FONTS.condensed, fontSize: 20, fontWeight: 700, textTransform: "uppercase", color: C.steel }}>{c.nom}</div>
+                  <StatutBadge s={ST_CH[c.statut] ?? c.statut} />
+                </div>
+                <div style={{ color: C.steelSoft, fontSize: 13, marginTop: 4 }}>{c.client} · {c.ville}</div>
+                <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", fontSize: 12, color: C.steelSoft, marginBottom: 4 }}><span>Avancement</span><b style={{ color: C.steel }}>{c.avancementReel} %</b></div>
+                <Progress pct={Number(c.avancementReel)} />
+                <div style={{ marginTop: 10, fontSize: 12, color: C.orange, fontWeight: 600 }}>Voir le suivi →</div>
+              </div>
+            </Card>
+          ))}
+          {chantiers.length === 0 && <div style={{ color: C.steelSoft }}>Aucun chantier.</div>}
+        </div>
+      </div>
+    );
+  }
 
   if (sel) {
     const lot = sel.lots_immo;
@@ -53,6 +169,7 @@ export default function PortailAcquereur() {
 
     return (
       <div style={{ display: "grid", gap: 16 }}>
+        {switcher}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button onClick={() => setSel(null)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: C.steel }}><ArrowLeft size={15} /> Acquéreurs</button>
           <button onClick={() => printDocument(`Echeancier-${sel.acquereur}`, echeancierHtml)} style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}><Printer size={15} /> Échéancier PDF</button>
@@ -171,7 +288,7 @@ export default function PortailAcquereur() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ color: C.steelSoft, fontSize: 13 }}>Vue acquéreur : réservation, échéancier VEFA, documents. (En production : comptes acquéreurs dédiés.)</div>
+      {switcher}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
         {resas.map((r) => (
           <Card key={r.id} style={{ cursor: "pointer" }} >
