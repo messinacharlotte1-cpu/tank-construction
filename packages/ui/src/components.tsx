@@ -1,5 +1,15 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { C, FONTS } from "./theme";
+
+// Keyframes globales (injectées une fois) : shimmer skeleton, respect reduced-motion.
+if (typeof document !== "undefined" && !document.getElementById("tank-ui-keyframes")) {
+  const s = document.createElement("style");
+  s.id = "tank-ui-keyframes";
+  s.textContent =
+    "@keyframes tankshimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}" +
+    "@media (prefers-reduced-motion: reduce){[data-tankskel]{animation:none!important}}";
+  document.head.appendChild(s);
+}
 
 // Primitives extraites fidèlement du prototype validé client.
 // Aucune modification visuelle sans ticket (cf. CLAUDE.md).
@@ -125,6 +135,67 @@ export const Banner: React.FC<{ tone?: "info" | "success" | "warn" | "danger"; i
     </div>
   );
 };
+
+// Champ de formulaire : label persistant au-dessus (fin du placeholder-comme-label).
+export const fieldInput: React.CSSProperties = {
+  padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14,
+  fontFamily: FONTS.sans, width: "100%", boxSizing: "border-box", background: C.white, color: C.steel,
+};
+export const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
+  <label style={{ display: "grid", gap: 5 }}>
+    <span style={miniLabel}>{label}</span>
+    {children}
+    {hint && <span style={{ fontSize: 11.5, color: C.steelSoft }}>{hint}</span>}
+  </label>
+);
+
+// Fenêtre modale brandée (remplace window.prompt/confirm) : titre, corps, footer d'actions.
+// Ferme via ×, clic backdrop, ou Échap. role/aria pour l'accessibilité.
+export const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; width?: number }> = ({ title, onClose, children, footer, width = 440 }) => {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(27,37,48,.55)", display: "grid", placeItems: "center", padding: 16, zIndex: 1000 }}>
+      <div style={{ background: C.white, borderRadius: 14, width: "100%", maxWidth: width, boxShadow: "0 24px 64px rgba(27,37,48,.32)", overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel }}>{title}</div>
+          <button onClick={onClose} aria-label="Fermer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, fontSize: 24, lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+        <div style={{ padding: 18, overflowY: "auto", display: "grid", gap: 12 }}>{children}</div>
+        {footer && <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 18px", borderTop: `1px solid ${C.line}` }}>{footer}</div>}
+      </div>
+    </div>
+  );
+};
+
+// État vide = feature : icône + titre + contexte + action primaire (jamais un cul-de-sac gris).
+export const EmptyState: React.FC<{ icon?: React.ElementType; title: string; hint?: string; action?: React.ReactNode }> = ({ icon: Icon, title, hint, action }) => (
+  <div style={{ display: "grid", justifyItems: "center", gap: 12, textAlign: "center", padding: "44px 20px", border: `1px dashed ${C.line}`, borderRadius: 14, background: C.white }}>
+    {Icon && <div style={{ background: C.orangeSoft, borderRadius: 14, padding: 14, display: "grid", placeItems: "center" }}><Icon size={26} color={C.orange} /></div>}
+    <div style={{ fontFamily: FONTS.condensed, fontSize: 19, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: C.steel }}>{title}</div>
+    {hint && <div style={{ fontSize: 13.5, color: C.steelSoft, maxWidth: 400 }}>{hint}</div>}
+    {action}
+  </div>
+);
+
+// Squelette de chargement (shimmer) : pas de saut de layout, perçu soigné.
+export const Skeleton: React.FC<{ h?: number; w?: number | string; r?: number; style?: React.CSSProperties }> = ({ h = 14, w = "100%", r = 6, style }) => (
+  <div data-tankskel style={{ height: h, width: w, borderRadius: r, background: `linear-gradient(90deg, ${C.concrete} 25%, #E7ECF1 37%, ${C.concrete} 63%)`, backgroundSize: "400% 100%", animation: "tankshimmer 1.4s ease infinite", ...style }} />
+);
+export const SkeletonCard: React.FC = () => (
+  <div style={{ background: C.white, border: `1px solid ${C.line}`, borderRadius: 12, padding: 20, display: "grid", gap: 10 }}>
+    <Skeleton h={18} w="55%" />
+    <Skeleton h={12} w="82%" />
+    <Skeleton h={12} w="40%" />
+  </div>
+);
 
 export const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void }> = ({ on, onChange }) => (
   <button

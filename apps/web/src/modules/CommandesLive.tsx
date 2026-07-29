@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, ShoppingCart, FileText, BadgeCheck, PackageCheck } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa, EmptyState, SkeletonCard } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 import { printDocument, fcfaP } from "../lib/pdf";
 
@@ -190,7 +190,11 @@ export default function CommandesLive() {
       </Card>
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
+      {loading ? (
+        <div style={{ display: "grid", gap: 10 }}>{Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}</div>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={ShoppingCart} title="Aucune commande" hint="Créez une commande via le formulaire ci-dessus — depuis un devis, elle préremplit le chantier, puis se déroule jusqu'à la réception en stock." />
+      ) : (
         <>
           <SectionTitle icon={ShoppingCart}>Commandes ({rows.length})</SectionTitle>
           <div style={{ display: "grid", gap: 10 }}>
@@ -217,7 +221,6 @@ export default function CommandesLive() {
                 </Card>
               );
             })}
-            {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucune commande.</div>}
           </div>
         </>
       )}

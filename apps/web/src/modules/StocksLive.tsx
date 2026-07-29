@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, AlertTriangle, Search, ArrowDownCircle, ArrowUpCircle, Package, RotateCcw, Recycle } from "lucide-react";
-import { C, FONTS, Card, SectionTitle, btnGhost } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, btnGhost, btnPrimary, Modal, Field, fieldInput, EmptyState, SkeletonCard } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Article = { id: string; designation: string; unite: string; stock: number; seuil: number; chantierId: string | null };
@@ -30,6 +30,9 @@ export default function StocksLive() {
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [filtreChantier, setFiltreChantier] = useState("");
+  const [mv, setMv] = useState<{ a: Article; type: "ENTREE" | "SORTIE" | "RETOUR" } | null>(null);
+  const [mvForm, setMvForm] = useState({ qte: "", motif: "", poids: "", longueur: "", surface: "" });
+  const [mvBusy, setMvBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -67,34 +70,30 @@ export default function StocksLive() {
     const { error } = await supabase.from("articles").delete().eq("id", id);
     if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
   }
-  async function mouvement(a: Article, type: "ENTREE" | "SORTIE") {
-    const qte = Number(window.prompt(`${type === "ENTREE" ? "Entrée" : "Sortie"} — quantité (${a.unite}) :`, "0"));
-    if (!qte || qte <= 0) return;
-    const motif = window.prompt("Motif :", type === "ENTREE" ? "Livraison" : "Consommation chantier") ?? null;
-    const { error: me } = await supabase.from("mouvements_stock").insert({ id: crypto.randomUUID(), articleId: a.id, type, quantite: qte, motif, date: new Date().toISOString() });
-    if (me) return setErr(me.message.includes("row-level") ? "Droits insuffisants (rôle) pour un mouvement." : me.message);
-    const nouveau = type === "ENTREE" ? Number(a.stock) + qte : Number(a.stock) - qte;
-    await supabase.from("articles").update({ stock: nouveau }).eq("id", a.id);
-    void load();
+  // Ouvre la modale de mouvement (entrée / sortie / retour résiduel) — remplace window.prompt.
+  function openMv(a: Article, type: "ENTREE" | "SORTIE" | "RETOUR") {
+    setMvForm({ qte: "", motif: type === "ENTREE" ? "Livraison" : type === "SORTIE" ? "Consommation chantier" : "Retour résiduel", poids: "", longueur: "", surface: "" });
+    setMv({ a, type });
   }
-  // Retour magasin d'un matériau résiduel réutilisable (mouvement RETOUR + caractéristiques).
-  async function residuel(a: Article) {
-    const qte = Number(window.prompt(`Retour résiduel — quantité (${a.unite}) :`, "0"));
-    if (!qte || qte <= 0) return;
-    const poids = (window.prompt("Poids (ex : 40 kg — laisser vide si non applicable) :", "") ?? "").trim();
-    const longueur = (window.prompt("Longueur (ex : 2 m) :", "") ?? "").trim();
-    const surface = (window.prompt("Surface (ex : 3 m²) :", "") ?? "").trim();
-    const car: Caract = {};
-    if (poids) car.poids = poids;
-    if (longueur) car.longueur = longueur;
-    if (surface) car.surface = surface;
-    const { error: me } = await supabase.from("mouvements_stock").insert({
-      id: crypto.randomUUID(), articleId: a.id, type: "RETOUR", quantite: qte,
-      motif: "Retour résiduel", caracteristiques: Object.keys(car).length ? car : null, date: new Date().toISOString(),
-    });
-    if (me) return setErr(me.message.includes("row-level") ? "Droits insuffisants (rôle) pour un mouvement." : me.message);
-    await supabase.from("articles").update({ stock: Number(a.stock) + qte }).eq("id", a.id);
-    void load();
+  async function submitMv() {
+    if (!mv) return;
+    const { a, type } = mv;
+    const qte = Number(mvForm.qte);
+    if (!qte || qte <= 0) { setErr("Quantité invalide."); return; }
+    setMvBusy(true); setErr(null);
+    let caracteristiques: Caract | null = null;
+    if (type === "RETOUR") {
+      const car: Caract = {};
+      if (mvForm.poids.trim()) car.poids = mvForm.poids.trim();
+      if (mvForm.longueur.trim()) car.longueur = mvForm.longueur.trim();
+      if (mvForm.surface.trim()) car.surface = mvForm.surface.trim();
+      caracteristiques = Object.keys(car).length ? car : null;
+    }
+    const { error: me } = await supabase.from("mouvements_stock").insert({ id: crypto.randomUUID(), articleId: a.id, type, quantite: qte, motif: mvForm.motif || null, caracteristiques, date: new Date().toISOString() });
+    if (me) { setMvBusy(false); setErr(me.message.includes("row-level") ? "Droits insuffisants (rôle) pour un mouvement." : me.message); return; }
+    const nouveau = type === "SORTIE" ? Number(a.stock) - qte : Number(a.stock) + qte;
+    await supabase.from("articles").update({ stock: nouveau }).eq("id", a.id);
+    setMvBusy(false); setMv(null); void load();
   }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
@@ -120,7 +119,7 @@ export default function StocksLive() {
       </Card>
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (() => {
+      {loading ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div> : (() => {
         const scoped = rows.filter((a) => !filtreChantier || a.chantierId === (filtreChantier === "DEPOT" ? null : filtreChantier));
         const bas = scoped.filter((a) => Number(a.stock) < Number(a.seuil)).length;
         const list = scoped.filter((a) => a.designation.toLowerCase().includes(q.trim().toLowerCase()));
@@ -155,20 +154,26 @@ export default function StocksLive() {
                       <span style={{ fontSize: 13, color: C.steelSoft }}>{a.unite} · seuil {Number(a.seuil)}</span>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                      <button style={{ ...btnGhost, color: C.green, borderColor: C.greenSoft, flex: 1, justifyContent: "center" }} onClick={() => mouvement(a, "ENTREE")}>
+                      <button style={{ ...btnGhost, color: C.green, borderColor: C.greenSoft, flex: 1, justifyContent: "center" }} onClick={() => openMv(a, "ENTREE")}>
                         <ArrowDownCircle size={14} /> Entrée
                       </button>
-                      <button style={{ ...btnGhost, color: C.red, borderColor: C.redSoft, flex: 1, justifyContent: "center" }} onClick={() => mouvement(a, "SORTIE")}>
+                      <button style={{ ...btnGhost, color: C.red, borderColor: C.redSoft, flex: 1, justifyContent: "center" }} onClick={() => openMv(a, "SORTIE")}>
                         <ArrowUpCircle size={14} /> Sortie
                       </button>
-                      <button style={{ ...btnGhost, color: C.orange, borderColor: C.orangeSoft, flex: 1, justifyContent: "center" }} onClick={() => residuel(a)} title="Retour magasin d'un résiduel réutilisable">
+                      <button style={{ ...btnGhost, color: C.orange, borderColor: C.orangeSoft, flex: 1, justifyContent: "center" }} onClick={() => openMv(a, "RETOUR")} title="Retour magasin d'un résiduel réutilisable">
                         <RotateCcw size={14} /> Résiduel
                       </button>
                     </div>
                   </Card>
                 );
               })}
-              {list.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>{q ? "Aucun matériau pour cette recherche." : "Aucun article."}</div>}
+              {list.length === 0 && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  {q
+                    ? <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun matériau pour «&nbsp;{q}&nbsp;».</div>
+                    : <EmptyState icon={Package} title="Aucun article en stock" hint="Ajoutez un matériau via le formulaire ci-dessus, ou réceptionnez une commande depuis Commercial → Commandes." />}
+                </div>
+              )}
             </div>
 
             {residuels.length > 0 && (
@@ -194,6 +199,30 @@ export default function StocksLive() {
           </>
         );
       })()}
+
+      {mv && (
+        <Modal
+          title={mv.type === "ENTREE" ? "Entrée de stock" : mv.type === "SORTIE" ? "Sortie de stock" : "Retour résiduel"}
+          onClose={() => setMv(null)}
+          footer={<>
+            <button onClick={() => setMv(null)} style={btnGhost}>Annuler</button>
+            <button onClick={submitMv} disabled={mvBusy} style={btnPrimary}>{mvBusy ? "…" : "Valider"}</button>
+          </>}
+        >
+          <div style={{ fontSize: 13, color: C.steelSoft }}>{mv.a.designation} · {mv.a.unite} · stock actuel {Number(mv.a.stock)}</div>
+          <Field label={`Quantité (${mv.a.unite})`}>
+            <input style={fieldInput} type="number" min="0" autoFocus value={mvForm.qte} onChange={(e) => setMvForm({ ...mvForm, qte: e.target.value })} />
+          </Field>
+          <Field label="Motif">
+            <input style={fieldInput} value={mvForm.motif} onChange={(e) => setMvForm({ ...mvForm, motif: e.target.value })} />
+          </Field>
+          {mv.type === "RETOUR" && <>
+            <Field label="Poids" hint="ex : 40 kg (laisser vide si non applicable)"><input style={fieldInput} value={mvForm.poids} onChange={(e) => setMvForm({ ...mvForm, poids: e.target.value })} /></Field>
+            <Field label="Longueur" hint="ex : 2 m"><input style={fieldInput} value={mvForm.longueur} onChange={(e) => setMvForm({ ...mvForm, longueur: e.target.value })} /></Field>
+            <Field label="Surface" hint="ex : 3 m²"><input style={fieldInput} value={mvForm.surface} onChange={(e) => setMvForm({ ...mvForm, surface: e.target.value })} /></Field>
+          </>}
+        </Modal>
+      )}
     </div>
   );
 }

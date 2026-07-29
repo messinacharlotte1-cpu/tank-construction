@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, PencilRuler } from "lucide-react";
-import { C, FONTS, Card, StatutBadge } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, EmptyState, Skeleton } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 import DevisDetail from "./DevisDetail";
 
@@ -81,8 +81,12 @@ export default function DevisLive() {
       </Card>
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>Erreur : {err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
-        <Card style={{ padding: 0, overflow: "hidden" }}>
+      {loading ? (
+        <Card style={{ display: "grid", gap: 12 }}>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} h={20} />)}</Card>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={PencilRuler} title="Aucun devis" hint="Créez un premier devis via le formulaire ci-dessus, puis ouvrez le DQE pour détailler lots, sous-ouvrages et lignes." />
+      ) : (
+        <Card style={{ padding: 0, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ background: C.concrete, color: C.steelSoft, textAlign: "left" }}>
@@ -102,7 +106,6 @@ export default function DevisLive() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={5} style={{ padding: 16, color: C.steelSoft }}>Aucun devis.</td></tr>}
             </tbody>
           </table>
         </Card>
