@@ -18,25 +18,26 @@ model Tenant {
   nom       String
   createdAt DateTime @default(now())
 
-  users      User[]
-  chantiers  Chantier[]
-  devis      Devis[]
-  factures   Facture[]
-  articles   Article[]
-  programmes Programme[]
-  contrats   Contrat[]
-  fournisseurs Fournisseur[]
-  sousTraitants SousTraitant[]
-  materiels  Materiel[]
-  incidents  Incident[]
-  settings   Setting[]
-  bpuOuvrages BpuOuvrage[]
-  messages   Message[]
-  situations Situation[]
-  reserves   Reserve[]
-  medias     Media[]
-  auditLogs  AuditLog[]
+  users             User[]
+  chantiers         Chantier[]
+  devis             Devis[]
+  factures          Facture[]
+  articles          Article[]
+  programmes        Programme[]
+  contrats          Contrat[]
+  fournisseurs      Fournisseur[]
+  sousTraitants     SousTraitant[]
+  materiels         Materiel[]
+  incidents         Incident[]
+  settings          Setting[]
+  bpuOuvrages       BpuOuvrage[]
+  messages          Message[]
+  situations        Situation[]
+  reserves          Reserve[]
+  medias            Media[]
+  auditLogs         AuditLog[]
   securiteChecklist SecuriteChecklist[]
+  corpsEtats        CorpsEtat[]
 
   @@map("tenants")
 }
@@ -59,17 +60,17 @@ enum AccesMode {
 }
 
 model User {
-  id       String    @id @default(uuid())
-  tenantId String
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  email    String
-  nom      String
+  id        String    @id @default(uuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  email     String
+  nom       String
   telephone String? // coordonnées client (portail)
   adresse   String? // coordonnées client (portail)
-  role     Role      @default(TERRAIN)
-  acces    AccesMode @default(EMAIL_2FA)
-  actif    Boolean   @default(true)
-  createdAt DateTime @default(now())
+  role      Role      @default(TERRAIN)
+  acces     AccesMode @default(EMAIL_2FA)
+  actif     Boolean   @default(true)
+  createdAt DateTime  @default(now())
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -84,27 +85,67 @@ enum StatutChantier {
   TERMINE
 }
 
+// Périmètre d'exécution d'un chantier (corps d'état pris en charge).
+// Utile au suivi quand le marché se limite à l'un des deux (ou est mixte).
+enum PerimetreChantier {
+  GO // gros œuvre seul
+  SO // second œuvre seul
+  MIXTE // les deux
+}
+
+// Catégorie de corps d'état — split racine, fixe (2 valeurs).
+enum CategorieCorpsEtat {
+  GROS_OEUVRE
+  SECOND_OEUVRE
+}
+
+// Taxonomie corps d'état réutilisable (Gros/Second œuvre + poste/ouvrage).
+// Référencée par les tâches, les réserves et les lots DQE. Extensible sans migration
+// d'enum : les postes (Terrassement, Fondations, Plomberie…) sont des lignes, pas un enum.
+model CorpsEtat {
+  id        String             @id @default(uuid())
+  tenantId  String
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  categorie CategorieCorpsEtat
+  libelle   String // "Terrassement", "Fondations", "Élévation", "Plomberie"…
+  ordre     Int                @default(0)
+  actif     Boolean            @default(true)
+  createdAt DateTime           @default(now())
+
+  taches   Tache[]
+  reserves Reserve[]
+  lots     Lot[]
+
+  @@unique([tenantId, categorie, libelle])
+  @@index([tenantId])
+  @@map("corps_etat")
+}
+
 model Chantier {
-  id             String         @id @default(uuid())
-  tenantId       String
-  tenant         Tenant         @relation(fields: [tenantId], references: [id])
-  nom            String
-  client         String
-  userId         String? // compte maître d'ouvrage rattaché (auth.uid) — accès portail scopé
-  ville          String
-  statut         StatutChantier @default(EN_PREPARATION)
-  budget         BigInt // FCFA
-  consomme       BigInt         @default(0) // FCFA
-  debut          DateTime?
-  fin            DateTime?
-  avancementPrevu Int           @default(0)
-  avancementReel  Int           @default(0)
-  createdAt      DateTime       @default(now())
+  id              String             @id @default(uuid())
+  tenantId        String
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  nom             String
+  client          String
+  userId          String? // compte maître d'ouvrage rattaché (auth.uid) — accès portail scopé
+  ville           String
+  statut          StatutChantier     @default(EN_PREPARATION)
+  perimetre       PerimetreChantier? // GO | SO | MIXTE — corps d'état pris en charge
+  budget          BigInt // FCFA
+  consomme        BigInt             @default(0) // FCFA
+  debut           DateTime?
+  fin             DateTime?
+  avancementPrevu Int                @default(0)
+  avancementReel  Int                @default(0)
+  createdAt       DateTime           @default(now())
 
   taches    Tache[]
   jalons    Jalon[]
   pointages Pointage[]
   journal   JournalChantier[]
+  reserves  Reserve[]
+  medias    Media[]
+  devis     Devis[]
 
   @@index([tenantId])
   @@index([userId])
@@ -142,27 +183,30 @@ model JournalChantier {
 }
 
 model Tache {
-  id         String   @id @default(uuid())
-  chantierId String
-  chantier   Chantier @relation(fields: [chantierId], references: [id])
-  nom        String
-  lot        String
-  pct        Int      @default(0)
-  debut      DateTime?
-  duree      Int? // jours (Gantt)
-  dependance String?
+  id          String     @id @default(uuid())
+  chantierId  String
+  chantier    Chantier   @relation(fields: [chantierId], references: [id])
+  nom         String
+  lot         String // activité/lot de travaux (texte libre existant)
+  corpsEtatId String? // corps d'état de rattachement (Gros/Second œuvre + poste)
+  corpsEtat   CorpsEtat? @relation(fields: [corpsEtatId], references: [id])
+  pct         Int        @default(0)
+  debut       DateTime?
+  duree       Int? // jours (Gantt)
+  dependance  String?
 
   @@index([chantierId])
+  @@index([corpsEtatId])
   @@map("taches")
 }
 
 // Jalon = déclencheur d'appel de fonds VEFA (constat contradictoire requis avant émission).
 model Jalon {
-  id         String    @id @default(uuid())
+  id         String         @id @default(uuid())
   chantierId String
-  chantier   Chantier  @relation(fields: [chantierId], references: [id])
+  chantier   Chantier       @relation(fields: [chantierId], references: [id])
   libelle    String
-  valide     Boolean   @default(false)
+  valide     Boolean        @default(false)
   valideLe   DateTime?
   appels     AppelDeFonds[]
 
@@ -192,34 +236,40 @@ model Pointage {
 }
 
 model Devis {
-  id       String   @id @default(uuid())
-  tenantId String
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  numero   String // préfixe paramétrable DEV-, séquence par exercice
-  client   String
-  statut   String   @default("Brouillon")
-  remisePct Float   @default(0) // remise appliquée sur le total HT (avant TVA)
+  id         String    @id @default(uuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  numero     String // préfixe paramétrable DEV-, séquence par exercice
+  client     String
+  chantierId String? // chantier rattaché — rend le devis visible dans le volet du chantier
+  chantier   Chantier? @relation(fields: [chantierId], references: [id])
+  statut     String    @default("Brouillon")
+  remisePct  Float     @default(0) // remise appliquée sur le total HT (avant TVA)
   // Snapshot à l'émission : taux (TVA) + totaux figés en JSON. Jamais recalculés.
-  snapshot Json?
-  createdAt DateTime @default(now())
+  snapshot   Json?
+  createdAt  DateTime  @default(now())
 
   lots Lot[]
 
   @@unique([tenantId, numero])
   @@index([tenantId])
+  @@index([chantierId])
   @@map("devis")
 }
 
 model Lot {
-  id      String @id @default(uuid())
-  devisId String
-  devis   Devis  @relation(fields: [devisId], references: [id])
-  nom     String
-  ordre   Int    @default(0)
+  id          String     @id @default(uuid())
+  devisId     String
+  devis       Devis      @relation(fields: [devisId], references: [id])
+  nom         String
+  corpsEtatId String? // rattache le lot DQE à la taxonomie (au lieu du nom libre)
+  corpsEtat   CorpsEtat? @relation(fields: [corpsEtatId], references: [id])
+  ordre       Int        @default(0)
 
   sousOuvrages SousOuvrage[]
 
   @@index([devisId])
+  @@index([corpsEtatId])
   @@map("lots")
 }
 
@@ -277,14 +327,14 @@ enum ModePaiement {
 }
 
 model Facture {
-  id       String   @id @default(uuid())
-  tenantId String
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  numero   String // FAC-
-  client   String
-  ttc      BigInt // FCFA
-  statut   String   @default("Brouillon")
-  snapshot Json?
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  numero    String // FAC-
+  client    String
+  ttc       BigInt // FCFA
+  statut    String   @default("Brouillon")
+  snapshot  Json?
   createdAt DateTime @default(now())
 
   paiements Paiement[]
@@ -295,13 +345,13 @@ model Facture {
 }
 
 model Paiement {
-  id          String       @id @default(uuid())
-  factureId   String
-  facture     Facture      @relation(fields: [factureId], references: [id])
-  montant     BigInt // FCFA
-  mode        ModePaiement
+  id             String       @id @default(uuid())
+  factureId      String
+  facture        Facture      @relation(fields: [factureId], references: [id])
+  montant        BigInt // FCFA
+  mode           ModePaiement
   refTransaction String?
-  date        DateTime     @default(now())
+  date           DateTime     @default(now())
 
   @@index([factureId])
   @@map("paiements")
@@ -316,7 +366,7 @@ model Article {
   stock       Float  @default(0)
   seuil       Float  @default(0)
 
-  mouvements  MouvementStock[]
+  mouvements MouvementStock[]
 
   @@index([tenantId])
   @@map("articles")
@@ -357,15 +407,15 @@ model Fournisseur {
 }
 
 model SousTraitant {
-  id                String   @id @default(uuid())
-  tenantId          String
-  tenant            Tenant   @relation(fields: [tenantId], references: [id])
-  nom               String
-  corpsEtat         String // maçonnerie, électricité…
-  chantier          String?
-  montantMarche     BigInt   @default(0) // FCFA
-  retenueGarantiePct Float   @default(5)
-  createdAt         DateTime @default(now())
+  id                 String   @id @default(uuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  nom                String
+  corpsEtat          String // maçonnerie, électricité…
+  chantier           String?
+  montantMarche      BigInt   @default(0) // FCFA
+  retenueGarantiePct Float    @default(5)
+  createdAt          DateTime @default(now())
 
   @@index([tenantId])
   @@map("sous_traitants")
@@ -378,14 +428,14 @@ enum StatutMateriel {
 }
 
 model Materiel {
-  id               String         @id @default(uuid())
-  tenantId         String
-  tenant           Tenant         @relation(fields: [tenantId], references: [id])
-  nom              String
-  type             String? // engin, véhicule, outillage
-  statut           StatutMateriel @default(DISPONIBLE)
+  id                String         @id @default(uuid())
+  tenantId          String
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+  nom               String
+  type              String? // engin, véhicule, outillage
+  statut            StatutMateriel @default(DISPONIBLE)
   prochainEntretien DateTime?
-  createdAt        DateTime       @default(now())
+  createdAt         DateTime       @default(now())
 
   @@index([tenantId])
   @@map("materiels")
@@ -427,41 +477,58 @@ model Setting {
 
 // Réserves / OPR (opérations préalables à la réception).
 model Reserve {
-  id           String    @id @default(uuid())
+  id           String     @id @default(uuid())
   tenantId     String
-  tenant       Tenant    @relation(fields: [tenantId], references: [id])
-  chantier     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  chantier     String // nom du chantier (dénormalisé, conservé le temps de basculer sur la FK)
+  chantierId   String? // vrai lien chantier (backfill depuis le nom)
+  chantierRef  Chantier?  @relation(fields: [chantierId], references: [id])
+  corpsEtatId  String? // corps d'état + poste sur lequel la réserve est émise
+  corpsEtat    CorpsEtat? @relation(fields: [corpsEtatId], references: [id])
   localisation String?
   description  String
   entreprise   String?
-  statut       String    @default("Ouverte") // Ouverte | Levée
+  statut       String     @default("Ouverte") // Ouverte | Levée
   echeance     DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
 
   @@index([tenantId])
+  @@index([chantierId])
+  @@index([corpsEtatId])
   @@map("reserves")
 }
 
-// Médias (plans/photos) + annotations épinglées (x,y) stockées en JSON.
+// Catégorie de média : distingue photos, plans et actes administratifs (permis, certif urbanisme…).
+enum CategorieMedia {
+  PHOTO
+  PLAN
+  ACTE_ADMIN
+}
+
+// Médias (plans/photos/actes admin) + annotations épinglées (x,y) stockées en JSON.
 model Media {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
-  chantier    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+  chantier    String // nom du chantier (dénormalisé, conservé le temps de basculer sur la FK)
+  chantierId  String? // vrai lien chantier (backfill depuis le nom)
+  chantierRef Chantier?      @relation(fields: [chantierId], references: [id])
+  categorie   CategorieMedia @default(PHOTO)
   nom         String
   url         String // URL publique Supabase Storage (bucket `medias`)
   annotations Json? // [{ x, y, note, resolu }]
-  createdAt   DateTime @default(now())
+  createdAt   DateTime       @default(now())
 
   @@index([tenantId])
+  @@index([chantierId])
   @@map("medias")
 }
 
 // Bibliothèque de prix (BPU) — base Yaoundé, coefficients régionaux appliqués côté app.
 model BpuOuvrage {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   tenantId    String
-  tenant      Tenant @relation(fields: [tenantId], references: [id])
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
   code        String
   designation String
   unite       String
@@ -502,13 +569,13 @@ model AuditLog {
 
 // ── Promotion immobilière ─────────────────────────────────
 model Programme {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   tenantId  String
-  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   nom       String
   ville     String
-  public    Boolean   @default(false) // visible sur la vitrine publique (lecture anon)
-  createdAt DateTime  @default(now())
+  public    Boolean  @default(false) // visible sur la vitrine publique (lecture anon)
+  createdAt DateTime @default(now())
 
   lots LotImmo[]
 
