@@ -146,6 +146,7 @@ model Chantier {
   reserves  Reserve[]
   medias    Media[]
   devis     Devis[]
+  articles  Article[]
 
   @@index([tenantId])
   @@index([userId])
@@ -358,23 +359,27 @@ model Paiement {
 }
 
 model Article {
-  id          String @id @default(uuid())
+  id          String    @id @default(uuid())
   tenantId    String
-  tenant      Tenant @relation(fields: [tenantId], references: [id])
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  chantierId  String? // projet de rattachement du stock (magasin par chantier)
+  chantier    Chantier? @relation(fields: [chantierId], references: [id])
   designation String
   unite       String
-  stock       Float  @default(0)
-  seuil       Float  @default(0)
+  stock       Float     @default(0)
+  seuil       Float     @default(0)
 
   mouvements MouvementStock[]
 
   @@index([tenantId])
+  @@index([chantierId])
   @@map("articles")
 }
 
 enum TypeMouvement {
   ENTREE
   SORTIE
+  RETOUR // retour magasin d'un matériau résiduel (réutilisable)
 }
 
 model MouvementStock {
@@ -384,6 +389,8 @@ model MouvementStock {
   type      TypeMouvement
   quantite  Float
   motif     String?
+  // Résiduels (type RETOUR) : caractéristiques du reste réutilisable (poids/longueur/surface…).
+  caracteristiques Json?
   date      DateTime      @default(now())
 
   @@index([articleId, date])
