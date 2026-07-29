@@ -3,7 +3,7 @@ import {
   HardHat, LogOut, LayoutDashboard, Building2, FileText, Package, ClipboardCheck, FileSignature, Landmark, Banknote, ScrollText, UserCircle,
   TrendingUp, ShieldAlert, Wrench, Truck, Users, UserCog, Settings, Wallet,
   Calendar, Sparkles, CloudSun, Scale, MessageCircle, Store, Image as ImageIcon, ShieldCheck, ChevronDown, ChevronRight,
-  Search, X, Bell,
+  Search, X, Bell, ShoppingCart,
 } from "lucide-react";
 import { C, FONTS, Hazard } from "@tank/ui";
 import { supabase } from "../lib/supabase";
@@ -36,6 +36,7 @@ import MediasLive from "../modules/MediasLive";
 import SecuriteLive from "../modules/SecuriteLive";
 import PaieLive from "../modules/PaieLive";
 import FichesLive from "../modules/FichesLive";
+import CommandesLive from "../modules/CommandesLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 // group = section de nav (reproduit l'organisation de la maquette).
@@ -60,6 +61,7 @@ const PAGES: Page[] = [
   { id: "meteo", label: "Météo", icon: CloudSun, group: "Opérations", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "TERRAIN"], render: () => <MeteoLive /> },
 
   { id: "devis", label: "Devis", icon: FileSignature, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <DevisLive /> },
+  { id: "commandes", label: "Commandes", icon: ShoppingCart, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL", "COMPTA", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <CommandesLive /> },
   { id: "ao", label: "AO / BPU", icon: Scale, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL"], render: () => <AoBpuLive /> },
   { id: "situations", label: "Situations", icon: FileText, group: "Commercial", roles: ["DIRECTION", "COMMERCIAL", "COMPTA"], render: () => <SituationsLive /> },
   { id: "factures", label: "Factures", icon: FileText, group: "Commercial", roles: ["DIRECTION", "COMPTA", "COMMERCIAL"], render: () => <FacturesLive /> },

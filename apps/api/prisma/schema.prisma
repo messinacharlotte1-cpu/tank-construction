@@ -38,6 +38,7 @@ model Tenant {
   auditLogs         AuditLog[]
   securiteChecklist SecuriteChecklist[]
   corpsEtats        CorpsEtat[]
+  commandes         Commande[]
 
   @@map("tenants")
 }
@@ -147,6 +148,7 @@ model Chantier {
   medias    Media[]
   devis     Devis[]
   articles  Article[]
+  commandes Commande[]
 
   @@index([tenantId])
   @@index([userId])
@@ -250,7 +252,8 @@ model Devis {
   snapshot   Json?
   createdAt  DateTime  @default(now())
 
-  lots Lot[]
+  lots      Lot[]
+  commandes Commande[]
 
   @@unique([tenantId, numero])
   @@index([tenantId])
@@ -369,11 +372,51 @@ model Article {
   stock       Float     @default(0)
   seuil       Float     @default(0)
 
-  mouvements MouvementStock[]
+  mouvements     MouvementStock[]
+  commandeLignes CommandeLigne[]
 
   @@index([tenantId])
   @@index([chantierId])
   @@map("articles")
+}
+
+// Chaîne achats : un devis fait découler des commandes (fournisseur), d'où
+// proforma puis reçu après paiement, et enfin réception → entrée en stock.
+model Commande {
+  id            String       @id @default(uuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id])
+  numero        String
+  devisId       String? // devis d'origine
+  devis         Devis?       @relation(fields: [devisId], references: [id])
+  fournisseurId String?
+  fournisseur   Fournisseur? @relation(fields: [fournisseurId], references: [id])
+  chantierId    String? // chantier destinataire du stock
+  chantier      Chantier?    @relation(fields: [chantierId], references: [id])
+  statut        String       @default("Brouillon") // Brouillon | Proforma | Payée | Reçue
+  createdAt     DateTime     @default(now())
+
+  lignes CommandeLigne[]
+
+  @@unique([tenantId, numero])
+  @@index([tenantId])
+  @@index([devisId])
+  @@map("commandes")
+}
+
+model CommandeLigne {
+  id           String   @id @default(uuid())
+  commandeId   String
+  commande     Commande @relation(fields: [commandeId], references: [id])
+  articleId    String? // article de stock à réceptionner (créé si absent)
+  article      Article? @relation(fields: [articleId], references: [id])
+  designation  String
+  unite        String
+  quantite     Float
+  prixUnitaire BigInt   @default(0) // FCFA
+
+  @@index([commandeId])
+  @@map("commande_lignes")
 }
 
 enum TypeMouvement {
@@ -408,6 +451,8 @@ model Fournisseur {
   telephone String?
   note      Int      @default(0) // évaluation 0..5 (étoiles)
   createdAt DateTime @default(now())
+
+  commandes Commande[]
 
   @@index([tenantId])
   @@map("fournisseurs")
