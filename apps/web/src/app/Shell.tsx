@@ -35,6 +35,7 @@ import ReservesLive from "../modules/ReservesLive";
 import MediasLive from "../modules/MediasLive";
 import SecuriteLive from "../modules/SecuriteLive";
 import PaieLive from "../modules/PaieLive";
+import FichesLive from "../modules/FichesLive";
 
 // undefined roles = accessible à tous. SUPER_ADMIN voit tout (traité dans le filtre).
 // group = section de nav (reproduit l'organisation de la maquette).
@@ -70,6 +71,7 @@ const PAGES: Page[] = [
   { id: "contrats", label: "Contrats", icon: ScrollText, group: "Promotion", roles: ["DIRECTION", "COMMERCIAL"], render: () => <ContratsLive /> },
 
   { id: "stocks", label: "Stocks", icon: Package, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <StocksLive /> },
+  { id: "fiches", label: "Fiches & documents", icon: FileText, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA"], render: () => <FichesLive /> },
   { id: "fournisseurs", label: "Fournisseurs", icon: Truck, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER", "COMPTA"], render: () => <FournisseursLive /> },
   { id: "soustraitance", label: "Sous-traitance", icon: Users, group: "Ressources", roles: ["DIRECTION", "CONDUCTEUR", "CHEF_CHANTIER"], render: () => <SousTraitanceLive /> },
   { id: "paie", label: "Paie CNPS", icon: Wallet, group: "Ressources", roles: ["DIRECTION", "COMPTA"], render: () => <PaieLive /> },
