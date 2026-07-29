@@ -55,8 +55,8 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
     const [t, j, r, m, dv, jr, pts, ce] = await Promise.all([
       supabase.from("taches").select("id,nom,lot,pct,corpsEtatId").eq("chantierId", chantier.id).order("lot"),
       supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("valideLe", { nullsFirst: false }),
-      supabase.from("reserves").select("id,description,localisation,statut").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
-      supabase.from("medias").select("id,nom,url").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
+      supabase.from("reserves").select("id,description,localisation,statut").eq("chantierId", chantier.id).order("createdAt", { ascending: false }),
+      supabase.from("medias").select("id,nom,url").eq("chantierId", chantier.id).order("createdAt", { ascending: false }),
       supabase.from("devis").select("id,numero,client,statut").eq("chantierId", chantier.id).order("numero", { ascending: false }),
       supabase.from("journal_chantier").select("id,date,auteur,meteo,texte,photos").eq("chantierId", chantier.id).order("date", { ascending: false }),
       supabase.from("pointages").select("ouvrier,statut").eq("chantierId", chantier.id),
