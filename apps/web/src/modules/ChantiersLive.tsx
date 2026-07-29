@@ -19,6 +19,7 @@ type Chantier = {
   client: string;
   ville: string;
   statut: string;
+  perimetre: string | null;
   budget: number;
   consomme: number;
   avancementReel: number;
@@ -27,14 +28,17 @@ type Chantier = {
   fin: string | null;
 };
 
-const SELECT = "id,nom,client,ville,statut,budget,consomme,avancementReel,avancementPrevu,debut,fin";
+const SELECT = "id,nom,client,ville,statut,perimetre,budget,consomme,avancementReel,avancementPrevu,debut,fin";
+
+// Périmètre corps d'état pris en charge sur le chantier.
+const PERIMETRE_LABEL: Record<string, string> = { GO: "Gros œuvre", SO: "Second œuvre", MIXTE: "GO + SO" };
 
 export default function ChantiersLive() {
   const [rows, setRows] = useState<Chantier[]>([]);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ nom: "", client: "", ville: "", budget: "" });
+  const [form, setForm] = useState({ nom: "", client: "", ville: "", budget: "", perimetre: "" });
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Chantier | null>(null);
 
@@ -68,6 +72,7 @@ export default function ChantiersLive() {
       client: form.client,
       ville: form.ville,
       statut: "EN_PREPARATION",
+      perimetre: form.perimetre || null,
       budget: Number(form.budget) || 0,
       consomme: 0,
       avancementPrevu: 0,
@@ -79,7 +84,7 @@ export default function ChantiersLive() {
       setErr(error.message);
       return;
     }
-    setForm({ nom: "", client: "", ville: "", budget: "" });
+    setForm({ nom: "", client: "", ville: "", budget: "", perimetre: "" });
     void load();
   }
 
@@ -101,10 +106,16 @@ export default function ChantiersLive() {
         <div style={{ fontFamily: FONTS.condensed, fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.steel, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
           <Plus size={18} color={C.orange} /> Nouveau chantier
         </div>
-        <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.4fr 1.4fr auto", gap: 10, alignItems: "center" }}>
+        <form onSubmit={create} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.3fr 1.3fr 1.3fr auto", gap: 10, alignItems: "center" }}>
           <input style={input} placeholder="Nom du chantier" value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} required />
           <input style={input} placeholder="Client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} required />
           <input style={input} placeholder="Ville" value={form.ville} onChange={(e) => setForm({ ...form, ville: e.target.value })} required />
+          <select style={input} value={form.perimetre} onChange={(e) => setForm({ ...form, perimetre: e.target.value })} title="Périmètre corps d'état">
+            <option value="">Périmètre…</option>
+            <option value="GO">Gros œuvre</option>
+            <option value="SO">Second œuvre</option>
+            <option value="MIXTE">GO + SO</option>
+          </select>
           <input style={input} placeholder="Budget FCFA" type="number" min="0" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
           <button type="submit" disabled={busy} style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", fontFamily: FONTS.sans }}>
             {busy ? "…" : "Ajouter"}
@@ -133,6 +144,7 @@ export default function ChantiersLive() {
                 <div style={{ color: C.steelSoft, fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={13} /> {c.ville}</span>
                   <span>{c.client}</span>
+                  {c.perimetre && <span style={{ padding: "1px 8px", borderRadius: 999, background: C.concrete, border: `1px solid ${C.line}`, fontSize: 11, fontWeight: 600, color: C.steel }}>{PERIMETRE_LABEL[c.perimetre] ?? c.perimetre}</span>}
                 </div>
                 <div style={{ marginTop: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.steelSoft, marginBottom: 4 }}>

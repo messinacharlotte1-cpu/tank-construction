@@ -3,7 +3,8 @@ import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, Clipboa
 import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, SectionTitle, miniLabel, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
-type Tache = { id: string; nom: string; lot: string; pct: number };
+type Tache = { id: string; nom: string; lot: string; pct: number; corpsEtatId: string | null };
+type CorpsEtat = { id: string; categorie: "GROS_OEUVRE" | "SECOND_OEUVRE"; libelle: string };
 type Jalon = { id: string; libelle: string; valide: boolean; valideLe: string | null };
 type Reserve = { id: string; description: string; localisation: string | null; statut: string };
 type Media = { id: string; nom: string; url: string };
@@ -12,6 +13,7 @@ type Journal = { id: string; date: string; auteur: string; meteo: string | null;
 type Pt = { ouvrier: string; statut: string };
 
 const isPdf = (url: string) => /\.pdf($|\?)/i.test(url);
+const CAT_LABEL: Record<CorpsEtat["categorie"], string> = { GROS_OEUVRE: "Gros œuvre", SECOND_OEUVRE: "Second œuvre" };
 
 const STATUT_LABEL: Record<string, string> = {
   EN_PREPARATION: "En préparation", EN_COURS: "En cours", EN_RETARD: "En retard", SUSPENDU: "Suspendu", TERMINE: "Terminé",
@@ -37,6 +39,7 @@ const fdate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateStr
 export default function ChantierDetail({ chantier, onBack }: { chantier: ChantierHead; onBack: () => void }) {
   const [tab, setTab] = useState("apercu");
   const [taches, setTaches] = useState<Tache[]>([]);
+  const [corps, setCorps] = useState<CorpsEtat[]>([]);
   const [jalons, setJalons] = useState<Jalon[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [medias, setMedias] = useState<Media[]>([]);
@@ -44,21 +47,23 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
   const [journal, setJournal] = useState<Journal[]>([]);
   const [equipe, setEquipe] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [ft, setFt] = useState({ nom: "", lot: "Gros œuvre", pct: "0" });
+  const [ft, setFt] = useState({ nom: "", lot: "Gros œuvre", pct: "0", corpsEtatId: "" });
   const [fj, setFj] = useState("");
   const [fjr, setFjr] = useState({ auteur: "", meteo: "", texte: "" });
 
   async function load() {
-    const [t, j, r, m, dv, jr, pts] = await Promise.all([
-      supabase.from("taches").select("id,nom,lot,pct").eq("chantierId", chantier.id).order("lot"),
+    const [t, j, r, m, dv, jr, pts, ce] = await Promise.all([
+      supabase.from("taches").select("id,nom,lot,pct,corpsEtatId").eq("chantierId", chantier.id).order("lot"),
       supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("valideLe", { nullsFirst: false }),
       supabase.from("reserves").select("id,description,localisation,statut").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
       supabase.from("medias").select("id,nom,url").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
       supabase.from("devis").select("id,numero,client,statut").eq("chantierId", chantier.id).order("numero", { ascending: false }),
       supabase.from("journal_chantier").select("id,date,auteur,meteo,texte,photos").eq("chantierId", chantier.id).order("date", { ascending: false }),
       supabase.from("pointages").select("ouvrier,statut").eq("chantierId", chantier.id),
+      supabase.from("corps_etat").select("id,categorie,libelle").eq("actif", true).order("categorie").order("ordre"),
     ]);
     if (t.error) setErr(t.error.message); else setTaches((t.data as Tache[]) ?? []);
+    if (!ce.error) setCorps((ce.data as CorpsEtat[]) ?? []);
     setJalons((j.data as Jalon[]) ?? []);
     setReserves((r.data as Reserve[]) ?? []);
     setMedias((m.data as Media[]) ?? []);
@@ -71,10 +76,14 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
 
   async function addTache(e: React.FormEvent) {
     e.preventDefault();
-    const { error } = await supabase.from("taches").insert({ id: crypto.randomUUID(), chantierId: chantier.id, nom: ft.nom, lot: ft.lot, pct: Number(ft.pct) || 0 });
+    const { error } = await supabase.from("taches").insert({ id: crypto.randomUUID(), chantierId: chantier.id, nom: ft.nom, lot: ft.lot, corpsEtatId: ft.corpsEtatId || null, pct: Number(ft.pct) || 0 });
     if (error) return setErr(error.message);
-    setFt({ nom: "", lot: ft.lot, pct: "0" }); void load();
+    setFt({ nom: "", lot: ft.lot, pct: "0", corpsEtatId: ft.corpsEtatId }); void load();
   }
+  const corpsLabel = (id: string | null) => {
+    const c = corps.find((x) => x.id === id);
+    return c ? `${CAT_LABEL[c.categorie]} · ${c.libelle}` : null;
+  };
   async function setPct(t: Tache, pct: number) { setTaches((r) => r.map((x) => x.id === t.id ? { ...x, pct } : x)); await supabase.from("taches").update({ pct }).eq("id", t.id); }
   async function delTache(id: string) { await supabase.from("taches").delete().eq("id", id); setTaches((r) => r.filter((x) => x.id !== id)); }
 
@@ -187,9 +196,17 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
       {tab === "taches" && (
         <Card>
           <SectionTitle icon={ClipboardCheck}>Tâches et lots de travaux</SectionTitle>
-          <form onSubmit={addTache} style={{ display: "grid", gridTemplateColumns: "1.6fr 1.2fr 0.7fr auto", gap: 8, marginBottom: 14 }}>
+          <form onSubmit={addTache} style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1fr 0.6fr auto", gap: 8, marginBottom: 14 }}>
             <input style={inp} placeholder="Tâche" value={ft.nom} onChange={(e) => setFt({ ...ft, nom: e.target.value })} required />
-            <input style={inp} placeholder="Lot" value={ft.lot} onChange={(e) => setFt({ ...ft, lot: e.target.value })} />
+            <select style={inp} value={ft.corpsEtatId} onChange={(e) => setFt({ ...ft, corpsEtatId: e.target.value })} title="Corps d'état">
+              <option value="">Corps d'état…</option>
+              {(["GROS_OEUVRE", "SECOND_OEUVRE"] as const).map((cat) => {
+                const items = corps.filter((c) => c.categorie === cat);
+                if (!items.length) return null;
+                return <optgroup key={cat} label={CAT_LABEL[cat]}>{items.map((c) => <option key={c.id} value={c.id}>{c.libelle}</option>)}</optgroup>;
+              })}
+            </select>
+            <input style={inp} placeholder="Lot / activité" value={ft.lot} onChange={(e) => setFt({ ...ft, lot: e.target.value })} />
             <input style={inp} type="number" min="0" max="100" value={ft.pct} onChange={(e) => setFt({ ...ft, pct: e.target.value })} />
             <button type="submit" style={{ padding: "8px 12px", border: "none", borderRadius: 8, background: C.orange, color: C.white, cursor: "pointer" }}><Plus size={15} /></button>
           </form>
@@ -198,7 +215,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
               <div key={t.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 52px auto", gap: 10, alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: C.steel }}>{t.nom}</div>
-                  <div style={{ fontSize: 12, color: C.steelSoft }}>{t.lot}</div>
+                  <div style={{ fontSize: 12, color: C.steelSoft }}>{corpsLabel(t.corpsEtatId) ? `${corpsLabel(t.corpsEtatId)} — ${t.lot}` : t.lot}</div>
                   <div style={{ marginTop: 6 }}><Progress pct={Number(t.pct)} color={Number(t.pct) === 100 ? C.green : C.orange} /></div>
                 </div>
                 <input style={{ ...inp, padding: "5px 8px" }} type="number" min="0" max="100" value={t.pct} onChange={(e) => setPct(t, Number(e.target.value))} />
