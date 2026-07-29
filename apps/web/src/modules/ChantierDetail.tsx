@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, ClipboardCheck, Camera, CloudSun, WifiOff } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, ClipboardCheck, Camera, CloudSun, WifiOff, FileText, Receipt } from "lucide-react";
 import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, SectionTitle, miniLabel, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
@@ -7,8 +7,11 @@ type Tache = { id: string; nom: string; lot: string; pct: number };
 type Jalon = { id: string; libelle: string; valide: boolean; valideLe: string | null };
 type Reserve = { id: string; description: string; localisation: string | null; statut: string };
 type Media = { id: string; nom: string; url: string };
+type Devis = { id: string; numero: string; client: string; statut: string };
 type Journal = { id: string; date: string; auteur: string; meteo: string | null; texte: string; photos: number };
 type Pt = { ouvrier: string; statut: string };
+
+const isPdf = (url: string) => /\.pdf($|\?)/i.test(url);
 
 const STATUT_LABEL: Record<string, string> = {
   EN_PREPARATION: "En préparation", EN_COURS: "En cours", EN_RETARD: "En retard", SUSPENDU: "Suspendu", TERMINE: "Terminé",
@@ -25,6 +28,7 @@ const TABS = [
   { id: "taches", label: "Tâches" },
   { id: "medias", label: "Plans & Photos" },
   { id: "reserves", label: "Réserves & OPR" },
+  { id: "devis", label: "Devis" },
   { id: "journal", label: "Journal de chantier" },
 ];
 
@@ -36,6 +40,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
   const [jalons, setJalons] = useState<Jalon[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [medias, setMedias] = useState<Media[]>([]);
+  const [devis, setDevis] = useState<Devis[]>([]);
   const [journal, setJournal] = useState<Journal[]>([]);
   const [equipe, setEquipe] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -44,11 +49,12 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
   const [fjr, setFjr] = useState({ auteur: "", meteo: "", texte: "" });
 
   async function load() {
-    const [t, j, r, m, jr, pts] = await Promise.all([
+    const [t, j, r, m, dv, jr, pts] = await Promise.all([
       supabase.from("taches").select("id,nom,lot,pct").eq("chantierId", chantier.id).order("lot"),
       supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("valideLe", { nullsFirst: false }),
       supabase.from("reserves").select("id,description,localisation,statut").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
       supabase.from("medias").select("id,nom,url").eq("chantier", chantier.nom).order("createdAt", { ascending: false }),
+      supabase.from("devis").select("id,numero,client,statut").eq("chantierId", chantier.id).order("numero", { ascending: false }),
       supabase.from("journal_chantier").select("id,date,auteur,meteo,texte,photos").eq("chantierId", chantier.id).order("date", { ascending: false }),
       supabase.from("pointages").select("ouvrier,statut").eq("chantierId", chantier.id),
     ]);
@@ -56,6 +62,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
     setJalons((j.data as Jalon[]) ?? []);
     setReserves((r.data as Reserve[]) ?? []);
     setMedias((m.data as Media[]) ?? []);
+    setDevis((dv.data as Devis[]) ?? []);
     setJournal((jr.data as Journal[]) ?? []);
     const noms = [...new Set(((pts.data as Pt[]) ?? []).filter((p) => p.statut !== "A").map((p) => p.ouvrier))];
     setEquipe(noms);
@@ -122,7 +129,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
           <div style={{ display: "flex", gap: 4, marginTop: 16, borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
             {TABS.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONTS.sans, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, color: tab === t.id ? C.orange : C.steelSoft, borderBottom: `3px solid ${tab === t.id ? C.orange : "transparent"}` }}>
-                {t.label}{t.id === "reserves" && reservesOuvertes ? ` (${reservesOuvertes})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}
+                {t.label}{t.id === "reserves" && reservesOuvertes ? ` (${reservesOuvertes})` : ""}{t.id === "medias" && medias.length ? ` (${medias.length})` : ""}{t.id === "devis" && devis.length ? ` (${devis.length})` : ""}
               </button>
             ))}
           </div>
@@ -209,12 +216,37 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
           <SectionTitle icon={Camera}>Plans & photos</SectionTitle>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: 12 }}>
             {medias.map((m) => (
-              <div key={m.id} style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line}` }}>
-                <img src={m.url} alt={m.nom} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+              <a key={m.id} href={m.url} target="_blank" rel="noreferrer" style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line}`, textDecoration: "none" }}>
+                {isPdf(m.url) ? (
+                  <div style={{ width: "100%", height: 120, display: "grid", placeItems: "center", background: C.concrete }}><FileText size={34} color={C.orange} /></div>
+                ) : (
+                  <img src={m.url} alt={m.nom} style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+                )}
                 <div style={{ padding: 8, fontSize: 12, color: C.steel }}>{m.nom}</div>
-              </div>
+              </a>
             ))}
             {medias.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun plan/photo. Ajouter dans Opérations → Plans / Photos.</div>}
+          </div>
+        </Card>
+      )}
+
+      {tab === "devis" && (
+        <Card>
+          <SectionTitle icon={Receipt}>Devis du chantier</SectionTitle>
+          <div style={{ display: "grid", gap: 8 }}>
+            {devis.map((d) => (
+              <div key={d.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <FileText size={16} color={C.orange} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: C.steel }}>{d.numero}</div>
+                    <div style={{ fontSize: 12, color: C.steelSoft }}>{d.client}</div>
+                  </div>
+                </div>
+                <StatutBadge s={d.statut} />
+              </div>
+            ))}
+            {devis.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun devis rattaché. Rattacher un chantier au devis dans Commercial → Devis.</div>}
           </div>
         </Card>
       )}
