@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, PencilRuler } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, EmptyState, Skeleton } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, EmptyState, Skeleton, ConfirmModal } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
+import { humanError } from "../lib/errors";
 import DevisDetail from "./DevisDetail";
 
 type Devis = { id: string; numero: string; client: string; statut: string; chantierId: string | null };
@@ -17,6 +18,7 @@ export default function DevisLive() {
   const [form, setForm] = useState({ client: "", statut: "Brouillon", chantierId: "" });
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Devis | null>(null);
+  const [confirm, setConfirm] = useState<Devis | null>(null);
 
   async function load() {
     setLoading(true);
@@ -25,7 +27,7 @@ export default function DevisLive() {
       supabase.from("devis").select("id,numero,client,statut,chantierId").order("numero", { ascending: false }),
       supabase.from("chantiers").select("id,nom").order("nom"),
     ]);
-    if (dev.error) setErr(dev.error.message);
+    if (dev.error) setErr(humanError(dev.error.message));
     else setRows((dev.data as Devis[]) ?? []);
     if (!cha.error) setChantiers((cha.data as ChantierRef[]) ?? []);
     setLoading(false);
@@ -39,19 +41,20 @@ export default function DevisLive() {
     if (!tenantId) return;
     setBusy(true); setErr(null);
     const { data: numero, error: ne } = await supabase.rpc("next_numero", { kind: "devis" });
-    if (ne) { setBusy(false); setErr(ne.message); return; }
+    if (ne) { setBusy(false); setErr(humanError(ne.message)); return; }
     const { error } = await supabase.from("devis").insert({
       id: crypto.randomUUID(), tenantId, numero: numero as string, client: form.client,
       statut: form.statut, chantierId: form.chantierId || null, createdAt: new Date().toISOString(),
     });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (error) { setErr(humanError(error.message)); return; }
     setForm({ client: "", statut: "Brouillon", chantierId: "" });
     void load();
   }
   async function remove(id: string) {
     const { error } = await supabase.from("devis").delete().eq("id", id);
-    if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
+    if (error) setErr(humanError(error.message)); else setRows((r) => r.filter((x) => x.id !== id));
+    setConfirm(null);
   }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
@@ -102,13 +105,19 @@ export default function DevisLive() {
                   <td style={{ padding: 12 }}><StatutBadge s={d.statut} /></td>
                   <td style={{ padding: 12, textAlign: "right", whiteSpace: "nowrap" }}>
                     <button onClick={() => setOpen(d)} title="Ouvrir le DQE" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer", color: C.orange, marginRight: 8, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}><PencilRuler size={14} /> DQE</button>
-                    <button onClick={() => remove(d.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
+                    <button onClick={() => setConfirm(d)} title="Supprimer" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </Card>
+      )}
+      {confirm && (
+        <ConfirmModal danger confirmLabel="Supprimer"
+          title="Supprimer le devis"
+          message={<>Supprimer définitivement le devis <b>{confirm.numero}</b> ({confirm.client}) et son DQE ? Action irréversible.</>}
+          onConfirm={() => remove(confirm.id)} onClose={() => setConfirm(null)} />
       )}
     </div>
   );

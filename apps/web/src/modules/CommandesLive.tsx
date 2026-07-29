@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, ShoppingCart, FileText, BadgeCheck, PackageCheck } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa, EmptyState, SkeletonCard } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa, EmptyState, SkeletonCard, ConfirmModal } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
+import { humanError } from "../lib/errors";
 import { printDocument, fcfaP } from "../lib/pdf";
 
 type Ligne = { id: string; commandeId: string; articleId: string | null; designation: string; unite: string; quantite: number; prixUnitaire: number };
@@ -26,6 +27,8 @@ export default function CommandesLive() {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ devisId: "", fournisseurId: "", chantierId: "" });
   const [fl, setFl] = useState<FLigne[]>([{ designation: "", unite: "", qte: "", pu: "", articleId: "" }]);
+  const [confirmAct, setConfirmAct] = useState<{ c: Commande; mode: "del" | "recept" } | null>(null);
+  const [actBusy, setActBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -74,25 +77,27 @@ export default function CommandesLive() {
     if (!valides.length) { setErr("Ajoutez au moins une ligne."); return; }
     setBusy(true); setErr(null);
     const { data: numero, error: ne } = await supabase.rpc("next_numero", { kind: "commande" });
-    if (ne) { setBusy(false); setErr(ne.message); return; }
+    if (ne) { setBusy(false); setErr(humanError(ne.message)); return; }
     const cid = crypto.randomUUID();
     const { error: ce } = await supabase.from("commandes").insert({
       id: cid, tenantId: tid, numero: numero as string,
       devisId: form.devisId || null, fournisseurId: form.fournisseurId || null, chantierId: form.chantierId || null,
       statut: "Brouillon", createdAt: new Date().toISOString(),
     });
-    if (ce) { setBusy(false); setErr(ce.message); return; }
+    if (ce) { setBusy(false); setErr(humanError(ce.message)); return; }
     const payload = valides.map((l) => ({ id: crypto.randomUUID(), commandeId: cid, articleId: l.articleId || null, designation: l.designation, unite: l.unite || "u", quantite: Number(l.qte) || 0, prixUnitaire: Number(l.pu) || 0 }));
     const { error: le } = await supabase.from("commande_lignes").insert(payload);
     setBusy(false);
-    if (le) { setErr(le.message); return; }
+    if (le) { setErr(humanError(le.message)); return; }
     setForm({ devisId: "", fournisseurId: "", chantierId: "" });
     setFl([{ designation: "", unite: "", qte: "", pu: "", articleId: "" }]);
     void load();
   }
   async function remove(c: Commande) {
+    setActBusy(true);
     await supabase.from("commande_lignes").delete().eq("commandeId", c.id);
     await supabase.from("commandes").delete().eq("id", c.id);
+    setActBusy(false); setConfirmAct(null);
     void load();
   }
 
@@ -121,14 +126,13 @@ export default function CommandesLive() {
   // Réception : chaque ligne → entrée en stock (article existant ou créé).
   async function receptionner(c: Commande) {
     if (!tid) return;
-    if (!window.confirm(`Réceptionner la commande ${c.numero} ? Les quantités entrent en stock.`)) return;
-    setErr(null);
+    setActBusy(true); setErr(null);
     for (const l of lignesDe(c.id)) {
       let articleId = l.articleId;
       if (!articleId) {
         articleId = crypto.randomUUID();
         const { error } = await supabase.from("articles").insert({ id: articleId, tenantId: tid, chantierId: c.chantierId || null, designation: l.designation, unite: l.unite, stock: Number(l.quantite), seuil: 0 });
-        if (error) { setErr(error.message); return; }
+        if (error) { setActBusy(false); setConfirmAct(null); setErr(humanError(error.message)); return; }
         await supabase.from("commande_lignes").update({ articleId }).eq("id", l.id);
       } else {
         const a = articles.find((x) => x.id === articleId);
@@ -136,9 +140,10 @@ export default function CommandesLive() {
         await supabase.from("articles").update({ stock: nouveau }).eq("id", articleId);
       }
       const { error: me } = await supabase.from("mouvements_stock").insert({ id: crypto.randomUUID(), articleId, type: "ENTREE", quantite: Number(l.quantite), motif: `Réception commande ${c.numero}`, date: new Date().toISOString() });
-      if (me) { setErr(me.message); return; }
+      if (me) { setActBusy(false); setConfirmAct(null); setErr(humanError(me.message)); return; }
     }
     await setStatut(c, "Reçue");
+    setActBusy(false); setConfirmAct(null);
     void load();
   }
 
@@ -215,14 +220,25 @@ export default function CommandesLive() {
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {actBtn(() => proforma(c), "Proforma PDF", FileText, C.orange)}
                     {c.statut !== "Reçue" && c.statut !== "Payée" && actBtn(() => payer(c), "Payée + reçu", BadgeCheck, C.green)}
-                    {c.statut === "Payée" && actBtn(() => receptionner(c), "Réceptionner (stock)", PackageCheck, C.green)}
-                    {actBtn(() => remove(c), "Supprimer", Trash2, C.red)}
+                    {c.statut === "Payée" && actBtn(() => setConfirmAct({ c, mode: "recept" }), "Réceptionner (stock)", PackageCheck, C.green)}
+                    {actBtn(() => setConfirmAct({ c, mode: "del" }), "Supprimer", Trash2, C.red)}
                   </div>
                 </Card>
               );
             })}
           </div>
         </>
+      )}
+
+      {confirmAct?.mode === "del" && (
+        <ConfirmModal danger confirmLabel="Supprimer" title="Supprimer la commande" busy={actBusy}
+          message={<>Supprimer la commande <b>{confirmAct.c.numero}</b> et ses lignes ? Action irréversible.</>}
+          onConfirm={() => remove(confirmAct.c)} onClose={() => setConfirmAct(null)} />
+      )}
+      {confirmAct?.mode === "recept" && (
+        <ConfirmModal confirmLabel="Réceptionner" title="Réceptionner la commande" busy={actBusy}
+          message={<>Réceptionner <b>{confirmAct.c.numero}</b> ? Les quantités entrent en stock (mouvements d'entrée créés, articles incrémentés).</>}
+          onConfirm={() => receptionner(confirmAct.c)} onClose={() => setConfirmAct(null)} />
       )}
     </div>
   );

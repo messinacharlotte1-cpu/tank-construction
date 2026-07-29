@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, ClipboardCheck, Camera, CloudSun, WifiOff, FileText, Receipt, Upload } from "lucide-react";
-import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, SectionTitle, miniLabel, fcfa } from "@tank/ui";
+import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, SectionTitle, miniLabel, fcfa, ConfirmModal } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Tache = { id: string; nom: string; lot: string; pct: number; corpsEtatId: string | null };
@@ -51,6 +51,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
   const [busyUp, setBusyUp] = useState(false);
   const [catUp, setCatUp] = useState<"PHOTO" | "PLAN" | "ACTE_ADMIN">("PHOTO");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [confirmDel, setConfirmDel] = useState<{ kind: "tache" | "jalon"; id: string; label: string } | null>(null);
   const [ft, setFt] = useState({ nom: "", lot: "Gros œuvre", pct: "0", corpsEtatId: "" });
   const [fj, setFj] = useState("");
   const [fjr, setFjr] = useState({ auteur: "", meteo: "", texte: "" });
@@ -203,7 +204,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
                     <div style={{ fontSize: 14, fontWeight: 600, color: j.valide ? C.steelSoft : C.steel, textDecoration: j.valide ? "line-through" : "none" }}>{j.libelle}</div>
                     <div style={{ fontSize: 12, color: C.steelSoft }}>{j.valide && j.valideLe ? `validé le ${fdate(j.valideLe)}` : "à venir"}</div>
                   </div>
-                  <button onClick={() => delJalon(j.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={14} /></button>
+                  <button onClick={() => setConfirmDel({ kind: "jalon", id: j.id, label: j.libelle })} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={14} /></button>
                 </div>
               ))}
               {jalons.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun jalon.</div>}
@@ -239,7 +240,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
                 </div>
                 <input style={{ ...inp, padding: "5px 8px" }} type="number" min="0" max="100" value={t.pct} onChange={(e) => setPct(t, Number(e.target.value))} />
                 <div style={{ fontFamily: FONTS.condensed, fontSize: 22, fontWeight: 700, color: C.steel, textAlign: "right" }}>{t.pct} %</div>
-                <button onClick={() => delTache(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={15} /></button>
+                <button onClick={() => setConfirmDel({ kind: "tache", id: t.id, label: t.nom })} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={15} /></button>
               </div>
             ))}
             {taches.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucune tâche.</div>}
@@ -338,6 +339,14 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
             {journal.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucune entrée. Ajoutez un rapport ci-dessus.</div>}
           </div>
         </Card>
+      )}
+
+      {confirmDel && (
+        <ConfirmModal danger confirmLabel="Supprimer"
+          title={confirmDel.kind === "tache" ? "Supprimer la tâche" : "Supprimer le jalon"}
+          message={<>Supprimer «&nbsp;{confirmDel.label}&nbsp;» ? Action irréversible.</>}
+          onConfirm={() => { if (confirmDel.kind === "tache") void delTache(confirmDel.id); else void delJalon(confirmDel.id); setConfirmDel(null); }}
+          onClose={() => setConfirmDel(null)} />
       )}
     </div>
   );

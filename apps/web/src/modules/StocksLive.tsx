@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, AlertTriangle, Search, ArrowDownCircle, ArrowUpCircle, Package, RotateCcw, Recycle } from "lucide-react";
-import { C, FONTS, Card, SectionTitle, btnGhost, btnPrimary, Modal, Field, fieldInput, EmptyState, SkeletonCard } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, btnGhost, btnPrimary, Modal, ConfirmModal, Field, fieldInput, EmptyState, SkeletonCard } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
+import { humanError } from "../lib/errors";
 
 type Article = { id: string; designation: string; unite: string; stock: number; seuil: number; chantierId: string | null };
 type ChantierRef = { id: string; nom: string };
@@ -33,6 +34,7 @@ export default function StocksLive() {
   const [mv, setMv] = useState<{ a: Article; type: "ENTREE" | "SORTIE" | "RETOUR" } | null>(null);
   const [mvForm, setMvForm] = useState({ qte: "", motif: "", poids: "", longueur: "", surface: "" });
   const [mvBusy, setMvBusy] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<Article | null>(null);
 
   async function load() {
     setLoading(true);
@@ -62,13 +64,14 @@ export default function StocksLive() {
       stock: Number(form.stock) || 0, seuil: Number(form.seuil) || 0,
     });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (error) { setErr(humanError(error.message)); return; }
     setForm({ designation: "", unite: "", stock: "", seuil: "", chantierId: "" });
     void load();
   }
   async function remove(id: string) {
     const { error } = await supabase.from("articles").delete().eq("id", id);
-    if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id));
+    if (error) setErr(humanError(error.message)); else setRows((r) => r.filter((x) => x.id !== id));
+    setConfirmDel(null);
   }
   // Ouvre la modale de mouvement (entrée / sortie / retour résiduel) — remplace window.prompt.
   function openMv(a: Article, type: "ENTREE" | "SORTIE" | "RETOUR") {
@@ -90,7 +93,7 @@ export default function StocksLive() {
       caracteristiques = Object.keys(car).length ? car : null;
     }
     const { error: me } = await supabase.from("mouvements_stock").insert({ id: crypto.randomUUID(), articleId: a.id, type, quantite: qte, motif: mvForm.motif || null, caracteristiques, date: new Date().toISOString() });
-    if (me) { setMvBusy(false); setErr(me.message.includes("row-level") ? "Droits insuffisants (rôle) pour un mouvement." : me.message); return; }
+    if (me) { setMvBusy(false); setErr(humanError(me.message)); return; }
     const nouveau = type === "SORTIE" ? Number(a.stock) - qte : Number(a.stock) + qte;
     await supabase.from("articles").update({ stock: nouveau }).eq("id", a.id);
     setMvBusy(false); setMv(null); void load();
@@ -147,7 +150,7 @@ export default function StocksLive() {
                         <div style={{ fontSize: 14, fontWeight: 600, color: C.steel }}>{a.designation}</div>
                         <div style={{ fontSize: 12, color: C.steelSoft }}>Unité : {a.unite} · {chantierNom(a.chantierId) ?? "Dépôt central"}</div>
                       </div>
-                      {alerte ? <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} /> : <button onClick={() => remove(a.id)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, padding: 0 }}><Trash2 size={16} /></button>}
+                      {alerte ? <AlertTriangle size={18} color={C.red} style={{ flexShrink: 0 }} /> : <button onClick={() => setConfirmDel(a)} title="Supprimer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, padding: 4 }}><Trash2 size={16} /></button>}
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 10 }}>
                       <span style={{ fontFamily: FONTS.condensed, fontSize: 32, fontWeight: 700, color: alerte ? C.red : C.steel }}>{Number(a.stock)}</span>
@@ -222,6 +225,12 @@ export default function StocksLive() {
             <Field label="Surface" hint="ex : 3 m²"><input style={fieldInput} value={mvForm.surface} onChange={(e) => setMvForm({ ...mvForm, surface: e.target.value })} /></Field>
           </>}
         </Modal>
+      )}
+
+      {confirmDel && (
+        <ConfirmModal danger confirmLabel="Supprimer" title="Supprimer l'article"
+          message={<>Supprimer <b>{confirmDel.designation}</b> du stock ? Son historique de mouvements sera orphelin. Action irréversible.</>}
+          onConfirm={() => remove(confirmDel.id)} onClose={() => setConfirmDel(null)} />
       )}
     </div>
   );

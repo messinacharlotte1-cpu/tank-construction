@@ -116,8 +116,8 @@ export default function RentabiliteLive() {
           <span>Marge : <b style={{ color: visB - visC >= 0 ? C.green : C.red }}>{fcfa(visB - visC)}</b></span>
         </div>
       )}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <Card style={{ padding: 0, overflow: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
           <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>{["Chantier", "Périmètre", "Budget", "Consommé", "Marge", "Consommation", "Budget vs avanc."].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
           <tbody>
             {vis.map((c, i) => {

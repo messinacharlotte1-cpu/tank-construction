@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, CheckCircle2, Circle } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { C, FONTS, Card, ConfirmModal } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
+import { humanError } from "../lib/errors";
 
 type R = {
   id: string; chantier: string; chantierId: string | null; corpsEtatId: string | null;
@@ -19,6 +20,7 @@ export default function ReservesLive() {
   const [tid, setTid] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmDel, setConfirmDel] = useState<R | null>(null);
   const [f, setF] = useState({ chantierId: "", corpsEtatId: "", localisation: "", description: "", entreprise: "", echeance: "" });
 
   async function load() {
@@ -28,7 +30,7 @@ export default function ReservesLive() {
       supabase.from("chantiers").select("id,nom").order("nom"),
       supabase.from("corps_etat").select("id,categorie,libelle").eq("actif", true).order("categorie").order("ordre"),
     ]);
-    if (res.error) setErr(res.error.message); else setRows((res.data as R[]) ?? []);
+    if (res.error) setErr(humanError(res.error.message)); else setRows((res.data as R[]) ?? []);
     if (!cha.error) setChantiers((cha.data as ChantierRef[]) ?? []);
     if (!ce.error) setCorps((ce.data as CorpsEtat[]) ?? []);
     setLoading(false);
@@ -53,7 +55,7 @@ export default function ReservesLive() {
       localisation: f.localisation || null, description: f.description, entreprise: f.entreprise || null,
       statut: "Ouverte", echeance: f.echeance || null, createdAt: new Date().toISOString(),
     });
-    if (error) return setErr(error.message.includes("row-level") ? "Droits insuffisants (rôle)." : error.message);
+    if (error) return setErr(humanError(error.message));
     setF({ chantierId: "", corpsEtatId: "", localisation: "", description: "", entreprise: "", echeance: "" }); void load();
   }
   async function toggle(r: R) {
@@ -61,7 +63,7 @@ export default function ReservesLive() {
     setRows((x) => x.map((y) => y.id === r.id ? { ...y, statut } : y));
     await supabase.from("reserves").update({ statut }).eq("id", r.id);
   }
-  async function del(id: string) { const { error } = await supabase.from("reserves").delete().eq("id", id); if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id)); }
+  async function del(id: string) { const { error } = await supabase.from("reserves").delete().eq("id", id); if (error) setErr(humanError(error.message)); else setRows((r) => r.filter((x) => x.id !== id)); setConfirmDel(null); }
 
   const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   const ouvertes = rows.filter((r) => r.statut === "Ouverte").length;
@@ -114,13 +116,18 @@ export default function ReservesLive() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ color: levee ? C.green : C.red, fontWeight: 700, fontSize: 12, textTransform: "uppercase" }}>{r.statut}</span>
-                  <button onClick={() => del(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
+                  <button onClick={() => setConfirmDel(r)} title="Supprimer" style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: C.red }}><Trash2 size={16} /></button>
                 </div>
               </Card>
             );
           })}
           {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucune réserve.</div>}
         </div>
+      )}
+      {confirmDel && (
+        <ConfirmModal danger confirmLabel="Supprimer" title="Supprimer la réserve"
+          message={<>Supprimer cette réserve ? «&nbsp;{confirmDel.description}&nbsp;». Action irréversible.</>}
+          onConfirm={() => del(confirmDel.id)} onClose={() => setConfirmDel(null)} />
       )}
     </div>
   );

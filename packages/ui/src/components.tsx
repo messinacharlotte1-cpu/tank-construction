@@ -175,6 +175,17 @@ export const Modal: React.FC<{ title: string; onClose: () => void; children: Rea
   );
 };
 
+// Confirmation d'action (surtout destructive) — remplace window.confirm.
+export const ConfirmModal: React.FC<{ title?: string; message: React.ReactNode; confirmLabel?: string; danger?: boolean; busy?: boolean; onConfirm: () => void; onClose: () => void }> = ({ title, message, confirmLabel, danger, busy, onConfirm, onClose }) => (
+  <Modal title={title ?? "Confirmer"} onClose={onClose} width={400}
+    footer={<>
+      <button onClick={onClose} style={btnGhost}>Annuler</button>
+      <button onClick={onConfirm} disabled={busy} style={{ ...btnPrimary, background: danger ? C.red : C.orange }}>{busy ? "…" : (confirmLabel ?? "Confirmer")}</button>
+    </>}>
+    <div style={{ fontSize: 14, color: C.steel, lineHeight: 1.5 }}>{message}</div>
+  </Modal>
+);
+
 // État vide = feature : icône + titre + contexte + action primaire (jamais un cul-de-sac gris).
 export const EmptyState: React.FC<{ icon?: React.ElementType; title: string; hint?: string; action?: React.ReactNode }> = ({ icon: Icon, title, hint, action }) => (
   <div style={{ display: "grid", justifyItems: "center", gap: 12, textAlign: "center", padding: "44px 20px", border: `1px dashed ${C.line}`, borderRadius: 14, background: C.white }}>
