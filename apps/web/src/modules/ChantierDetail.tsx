@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, ClipboardCheck, Camera, CloudSun, WifiOff, FileText, Receipt } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Calendar, MapPin, Users, ClipboardCheck, Camera, CloudSun, WifiOff, FileText, Receipt, Upload } from "lucide-react";
 import { C, FONTS, Card, Progress, Hazard, Kpi, StatutBadge, SectionTitle, miniLabel, fcfa } from "@tank/ui";
-import { supabase } from "../lib/supabase";
+import { supabase, getTenant } from "../lib/supabase";
 
 type Tache = { id: string; nom: string; lot: string; pct: number; corpsEtatId: string | null };
 type CorpsEtat = { id: string; categorie: "GROS_OEUVRE" | "SECOND_OEUVRE"; libelle: string };
@@ -47,11 +47,16 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
   const [journal, setJournal] = useState<Journal[]>([]);
   const [equipe, setEquipe] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [tid, setTid] = useState<string | null>(null);
+  const [busyUp, setBusyUp] = useState(false);
+  const [catUp, setCatUp] = useState<"PHOTO" | "PLAN" | "ACTE_ADMIN">("PHOTO");
+  const fileRef = useRef<HTMLInputElement>(null);
   const [ft, setFt] = useState({ nom: "", lot: "Gros œuvre", pct: "0", corpsEtatId: "" });
   const [fj, setFj] = useState("");
   const [fjr, setFjr] = useState({ auteur: "", meteo: "", texte: "" });
 
   async function load() {
+    setTid(await getTenant());
     const [t, j, r, m, dv, jr, pts, ce] = await Promise.all([
       supabase.from("taches").select("id,nom,lot,pct,corpsEtatId").eq("chantierId", chantier.id).order("lot"),
       supabase.from("jalons").select("id,libelle,valide,valideLe").eq("chantierId", chantier.id).order("valideLe", { nullsFirst: false }),
@@ -106,6 +111,20 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
     const { error } = await supabase.from("journal_chantier").insert({ id: crypto.randomUUID(), chantierId: chantier.id, auteur: fjr.auteur || "Terrain", meteo: fjr.meteo || null, texte: fjr.texte, photos: 0 });
     if (error) return setErr(error.message);
     setFjr({ auteur: "", meteo: "", texte: "" }); void load();
+  }
+
+  // Upload direct depuis la fiche — pré-rattaché à CE chantier (nom + chantierId).
+  async function uploadMedia(file: File) {
+    if (!tid) { setErr("Tenant introuvable."); return; }
+    setBusyUp(true); setErr(null);
+    const path = `${tid}/${crypto.randomUUID()}-${file.name}`;
+    const up = await supabase.storage.from("medias").upload(path, file);
+    if (up.error) { setBusyUp(false); setErr("Upload : " + up.error.message); return; }
+    const { data: pub } = supabase.storage.from("medias").getPublicUrl(path);
+    const { error } = await supabase.from("medias").insert({ id: crypto.randomUUID(), tenantId: tid, chantier: chantier.nom, chantierId: chantier.id, categorie: catUp, nom: file.name, url: pub.publicUrl, annotations: [], createdAt: new Date().toISOString() });
+    setBusyUp(false);
+    if (error) { setErr(error.message.includes("row-level") ? "Droits insuffisants (rôle)." : error.message); return; }
+    void load();
   }
 
   const inp: React.CSSProperties = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
@@ -231,6 +250,16 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
       {tab === "medias" && (
         <Card>
           <SectionTitle icon={Camera}>Plans & photos</SectionTitle>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <select style={inp} value={catUp} onChange={(e) => setCatUp(e.target.value as "PHOTO" | "PLAN" | "ACTE_ADMIN")}>
+              <option value="PHOTO">Photo</option>
+              <option value="PLAN">Plan</option>
+              <option value="ACTE_ADMIN">Acte administratif</option>
+            </select>
+            <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && uploadMedia(e.target.files[0])} />
+            <button onClick={() => fileRef.current?.click()} disabled={busyUp} style={{ display: "flex", alignItems: "center", gap: 6, background: C.orange, color: C.white, border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}><Upload size={15} /> {busyUp ? "Upload…" : "Ajouter ici"}</button>
+            <span style={{ fontSize: 12, color: C.steelSoft }}>Rattaché directement à ce chantier.</span>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px,1fr))", gap: 12 }}>
             {medias.map((m) => (
               <a key={m.id} href={m.url} target="_blank" rel="noreferrer" style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line}`, textDecoration: "none" }}>
@@ -242,7 +271,7 @@ export default function ChantierDetail({ chantier, onBack }: { chantier: Chantie
                 <div style={{ padding: 8, fontSize: 12, color: C.steel }}>{m.nom}</div>
               </a>
             ))}
-            {medias.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun plan/photo. Ajouter dans Opérations → Plans / Photos.</div>}
+            {medias.length === 0 && <div style={{ color: C.steelSoft, fontSize: 13 }}>Aucun plan/photo. Utilisez « Ajouter ici » ci-dessus.</div>}
           </div>
         </Card>
       )}
