@@ -6,20 +6,24 @@ import { supabase } from "../lib/supabase";
 
 type Kpi = { label: string; val: string | number; sub: string; icon: typeof HardHat; alert?: boolean };
 type Alerte = { t: string; page: string };
-type Ch = { nom: string; statut: string; budget: number; consomme: number; avancementPrevu: number; avancementReel: number };
+type Ch = { nom: string; statut: string; perimetre: string | null; budget: number; consomme: number; avancementPrevu: number; avancementReel: number };
 type Pt = { ouvrier: string; statut: string; date: string };
+type Perim = { key: string; label: string; nb: number; budget: number };
+
+const PERIMETRE_LABEL: Record<string, string> = { GO: "Gros œuvre", SO: "Second œuvre", MIXTE: "GO + SO" };
 
 export default function Dashboard({ go }: { go?: (id: string) => void }) {
   const [kpis, setKpis] = useState<Kpi[]>([]);
   const [alertes, setAlertes] = useState<Alerte[]>([]);
   const [budgetData, setBudgetData] = useState<{ nom: string; Prévu: number; Consommé: number }[]>([]);
   const [avancData, setAvancData] = useState<{ nom: string; Prévu: number; Réel: number }[]>([]);
+  const [perim, setPerim] = useState<Perim[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       const [{ data: ch }, { data: fa }, { data: ar }, { data: pt }] = await Promise.all([
-        supabase.from("chantiers").select("nom,statut,budget,consomme,avancementPrevu,avancementReel"),
+        supabase.from("chantiers").select("nom,statut,perimetre,budget,consomme,avancementPrevu,avancementReel"),
         supabase.from("factures").select("ttc,statut"),
         supabase.from("articles").select("designation,stock,seuil"),
         supabase.from("pointages").select("ouvrier,statut,date"),
@@ -54,6 +58,11 @@ export default function Dashboard({ go }: { go?: (id: string) => void }) {
       const actifsCh = chantiers.filter((c) => c.statut !== "TERMINE");
       setBudgetData(actifsCh.map((c) => ({ nom: c.nom.split(" ").slice(0, 2).join(" "), Prévu: Math.round(Number(c.budget) / 1e6), Consommé: Math.round(Number(c.consomme) / 1e6) })));
       setAvancData(actifsCh.map((c) => ({ nom: c.nom.split(" ").slice(0, 2).join(" "), Prévu: Number(c.avancementPrevu), Réel: Number(c.avancementReel) })));
+      // Répartition par corps d'état (périmètre chantier) — cadre optionnel : masqué si aucun chantier n'est renseigné.
+      setPerim((["GO", "SO", "MIXTE"] as const).map((k) => {
+        const g = chantiers.filter((c) => c.perimetre === k);
+        return { key: k, label: PERIMETRE_LABEL[k], nb: g.length, budget: g.reduce((s, c) => s + Number(c.budget), 0) };
+      }).filter((p) => p.nb > 0));
       setLoading(false);
     })();
   }, []);
@@ -101,6 +110,22 @@ export default function Dashboard({ go }: { go?: (id: string) => void }) {
           </ResponsiveContainer>
         </Card>
       </div>
+
+      {perim.length > 0 && (
+        <Card>
+          <SectionTitle icon={HardHat}>Répartition par corps d'état</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 12 }}>
+            {perim.map((p) => (
+              <div key={p.key} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.steelSoft, textTransform: "uppercase", letterSpacing: 0.6 }}>{p.label}</div>
+                <div style={{ fontFamily: FONTS.condensed, fontSize: 30, fontWeight: 700, color: C.steel }}>{p.nb} <span style={{ fontSize: 14, color: C.steelSoft }}>chantier{p.nb > 1 ? "s" : ""}</span></div>
+                <div style={{ fontSize: 12, color: C.steelSoft }}>Budget : {fcfa(p.budget)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: C.steelSoft, marginTop: 10 }}>Renseignez le périmètre d'un chantier (Gros œuvre / Second œuvre / Mixte) à sa création pour l'inclure ici.</div>
+        </Card>
+      )}
 
       <div onClick={() => go?.("meteo")} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, cursor: "pointer", background: C.white, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 18px" }}>
         <CloudRain size={26} color="#3B82C4" />

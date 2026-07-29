@@ -4,7 +4,16 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { C, FONTS, Card, Progress, SectionTitle, fcfa } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
-type Ch = { nom: string; statut: string; budget: number; consomme: number; avancementReel: number };
+type Ch = { nom: string; statut: string; perimetre: string | null; budget: number; consomme: number; avancementReel: number };
+type Filtre = "ALL" | "GO" | "SO" | "MIXTE";
+
+const PERIMETRE_LABEL: Record<string, string> = { GO: "Gros œuvre", SO: "Second œuvre", MIXTE: "GO + SO" };
+const FILTRES: { key: Filtre; label: string }[] = [
+  { key: "ALL", label: "Tout" },
+  { key: "GO", label: "Gros œuvre" },
+  { key: "SO", label: "Second œuvre" },
+  { key: "MIXTE", label: "Mixte" },
+];
 
 export default function RentabiliteLive() {
   const [rows, setRows] = useState<Ch[]>([]);
@@ -13,11 +22,12 @@ export default function RentabiliteLive() {
   const [facture, setFacture] = useState(0);
   const [encaisse, setEncaisse] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [filtre, setFiltre] = useState<Filtre>("ALL");
 
   useEffect(() => {
     (async () => {
       const [{ data: ch }, { data: st }, { data: fa }, { data: pa }, { data: stt }] = await Promise.all([
-        supabase.from("chantiers").select("nom,statut,budget,consomme,avancementReel").order("nom"),
+        supabase.from("chantiers").select("nom,statut,perimetre,budget,consomme,avancementReel").order("nom"),
         supabase.from("settings").select("valeur").eq("cle", "seuil_alerte_budget").maybeSingle(),
         supabase.from("factures").select("ttc"),
         supabase.from("paiements").select("montant"),
@@ -37,13 +47,17 @@ export default function RentabiliteLive() {
   if (loading) return <div style={{ color: C.steelSoft }}>Chargement…</div>;
   const totB = rows.reduce((s, c) => s + Number(c.budget), 0);
   const totC = rows.reduce((s, c) => s + Number(c.consomme), 0);
+  // Lentille corps d'état : filtre les chantiers par périmètre (GO / SO / MIXTE).
+  const vis = filtre === "ALL" ? rows : rows.filter((c) => (c.perimetre ?? "") === filtre);
+  const visB = vis.reduce((s, c) => s + Number(c.budget), 0);
+  const visC = vis.reduce((s, c) => s + Number(c.consomme), 0);
 
   // Export SYSCOHADA (CSV) — journal simplifié rentabilité.
   function exportCsv() {
-    const head = "Chantier;Budget;Consomme;Marge;Consommation%";
+    const head = "Chantier;Perimetre;Budget;Consomme;Marge;Consommation%";
     const lines = rows.map((c) => {
       const b = Number(c.budget), co = Number(c.consomme);
-      return `${c.nom};${b};${co};${b - co};${b ? Math.round((co / b) * 100) : 0}`;
+      return `${c.nom};${c.perimetre ? PERIMETRE_LABEL[c.perimetre] ?? c.perimetre : ""};${b};${co};${b - co};${b ? Math.round((co / b) * 100) : 0}`;
     });
     const csv = [head, ...lines, `;;;;`, `Engagé;${engage};Facturé;${facture};Encaissé;${encaisse}`].join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
@@ -51,7 +65,7 @@ export default function RentabiliteLive() {
   }
 
   const derives = rows.filter((c) => { const b = Number(c.budget); const pct = b ? Math.round((Number(c.consomme) / b) * 100) : 0; return pct >= seuil && Number(c.avancementReel) < 100; });
-  const chart = rows.map((c) => ({ nom: c.nom.split(" ").slice(0, 2).join(" "), "Marge (M)": Math.round((Number(c.budget) - Number(c.consomme)) / 1e6) }));
+  const chart = vis.map((c) => ({ nom: c.nom.split(" ").slice(0, 2).join(" "), "Marge (M)": Math.round((Number(c.budget) - Number(c.consomme)) / 1e6) }));
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -81,11 +95,32 @@ export default function RentabiliteLive() {
         <div style={{ fontSize: 13, color: C.steelSoft }}>Garde-fou : alerte si consommé &gt; <b>{seuil}%</b> du budget. Reste à encaisser : <b>{fcfa(facture - encaisse)}</b>.</div>
         <button onClick={exportCsv} style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}><Download size={15} /> Export SYSCOHADA (CSV)</button>
       </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: C.steelSoft, fontWeight: 600, textTransform: "uppercase" }}>Corps d'état :</span>
+        {FILTRES.map((c) => {
+          const actif = filtre === c.key;
+          const n = c.key === "ALL" ? rows.length : rows.filter((x) => (x.perimetre ?? "") === c.key).length;
+          return (
+            <button key={c.key} onClick={() => setFiltre(c.key)}
+              style={{ padding: "6px 12px", borderRadius: 999, border: `1px solid ${actif ? C.orange : C.line}`, background: actif ? C.orange : "transparent", color: actif ? C.white : C.steel, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+              {c.label} ({n})
+            </button>
+          );
+        })}
+      </div>
+      {filtre !== "ALL" && (
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13, color: C.steel, background: C.concrete, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 14px" }}>
+          <span><b>{PERIMETRE_LABEL[filtre]}</b> — {vis.length} chantier(s)</span>
+          <span>Budget : <b>{fcfa(visB)}</b></span>
+          <span>Consommé : <b>{fcfa(visC)}</b></span>
+          <span>Marge : <b style={{ color: visB - visC >= 0 ? C.green : C.red }}>{fcfa(visB - visC)}</b></span>
+        </div>
+      )}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>{["Chantier", "Budget", "Consommé", "Marge", "Consommation", "Budget vs avanc."].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ background: C.steel, color: C.white, textAlign: "left" }}>{["Chantier", "Périmètre", "Budget", "Consommé", "Marge", "Consommation", "Budget vs avanc."].map((h) => <th key={h} style={{ padding: "10px 12px", fontFamily: FONTS.condensed, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
           <tbody>
-            {rows.map((c, i) => {
+            {vis.map((c, i) => {
               const b = Number(c.budget), co = Number(c.consomme), av = Number(c.avancementReel);
               const pct = b ? Math.round((co / b) * 100) : 0;
               const marge = b - co;
@@ -94,6 +129,7 @@ export default function RentabiliteLive() {
               return (
                 <tr key={i} style={{ borderTop: `1px solid ${C.line}`, background: derive ? "#FFF6F5" : i % 2 ? "#FAFBFC" : C.white }}>
                   <td style={{ padding: "10px 12px", fontWeight: 700, color: C.steel }}>{c.nom}</td>
+                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontSize: 12, color: c.perimetre ? C.steel : C.steelSoft }}>{c.perimetre ? PERIMETRE_LABEL[c.perimetre] ?? c.perimetre : "—"}</td>
                   <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>{fcfa(b)}</td>
                   <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>{fcfa(co)}</td>
                   <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: marge >= 0 ? C.green : C.red, fontWeight: 700 }}>{fcfa(marge)}</td>
@@ -107,7 +143,7 @@ export default function RentabiliteLive() {
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={6} style={{ padding: 16, color: C.steelSoft }}>Aucun chantier.</td></tr>}
+            {vis.length === 0 && <tr><td colSpan={7} style={{ padding: 16, color: C.steelSoft }}>Aucun chantier pour ce périmètre.</td></tr>}
           </tbody>
         </table>
       </Card>
