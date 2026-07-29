@@ -5,7 +5,19 @@ import { supabase, getTenant } from "../lib/supabase";
 
 type Article = { id: string; designation: string; unite: string; stock: number; seuil: number; chantierId: string | null };
 type ChantierRef = { id: string; nom: string };
-type Residuel = { id: string; articleId: string; quantite: number; caracteristiques: { note?: string } | null; date: string };
+type Caract = { poids?: string; longueur?: string; surface?: string; note?: string };
+type Residuel = { id: string; articleId: string; quantite: number; caracteristiques: Caract | null; date: string };
+
+// Format lisible des caractéristiques d'un résiduel (structuré, rétro-compat {note}).
+export function fmtCaract(c: Caract | null): string {
+  if (!c) return "Sans caractéristiques";
+  const p: string[] = [];
+  if (c.poids) p.push(`poids ${c.poids}`);
+  if (c.longueur) p.push(`long. ${c.longueur}`);
+  if (c.surface) p.push(`surf. ${c.surface}`);
+  if (c.note) p.push(c.note);
+  return p.length ? p.join(" · ") : "Sans caractéristiques";
+}
 
 export default function StocksLive() {
   const [rows, setRows] = useState<Article[]>([]);
@@ -69,10 +81,16 @@ export default function StocksLive() {
   async function residuel(a: Article) {
     const qte = Number(window.prompt(`Retour résiduel — quantité (${a.unite}) :`, "0"));
     if (!qte || qte <= 0) return;
-    const note = window.prompt("Caractéristiques du résiduel (poids / longueur / surface, ex : « 3 barres 2 m, 40 kg ») :", "") ?? "";
+    const poids = (window.prompt("Poids (ex : 40 kg — laisser vide si non applicable) :", "") ?? "").trim();
+    const longueur = (window.prompt("Longueur (ex : 2 m) :", "") ?? "").trim();
+    const surface = (window.prompt("Surface (ex : 3 m²) :", "") ?? "").trim();
+    const car: Caract = {};
+    if (poids) car.poids = poids;
+    if (longueur) car.longueur = longueur;
+    if (surface) car.surface = surface;
     const { error: me } = await supabase.from("mouvements_stock").insert({
       id: crypto.randomUUID(), articleId: a.id, type: "RETOUR", quantite: qte,
-      motif: "Retour résiduel", caracteristiques: note ? { note } : null, date: new Date().toISOString(),
+      motif: "Retour résiduel", caracteristiques: Object.keys(car).length ? car : null, date: new Date().toISOString(),
     });
     if (me) return setErr(me.message.includes("row-level") ? "Droits insuffisants (rôle) pour un mouvement." : me.message);
     await supabase.from("articles").update({ stock: Number(a.stock) + qte }).eq("id", a.id);
@@ -163,7 +181,7 @@ export default function StocksLive() {
                       <div key={r.id} style={{ border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.orange}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                         <div>
                           <div style={{ fontWeight: 600, color: C.steel }}>{a?.designation ?? "Article supprimé"} — {Number(r.quantite)} {a?.unite ?? ""}</div>
-                          <div style={{ fontSize: 12, color: C.steelSoft }}>{r.caracteristiques?.note ? r.caracteristiques.note : "Sans caractéristiques"}{a ? ` · ${chantierNom(a.chantierId) ?? "Dépôt central"}` : ""}</div>
+                          <div style={{ fontSize: 12, color: C.steelSoft }}>{fmtCaract(r.caracteristiques)}{a ? ` · ${chantierNom(a.chantierId) ?? "Dépôt central"}` : ""}</div>
                         </div>
                         <span style={{ fontSize: 12, color: C.steelSoft, whiteSpace: "nowrap" }}>{fdate(r.date)}</span>
                       </div>

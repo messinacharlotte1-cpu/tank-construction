@@ -3,6 +3,7 @@ import { FileText, Plus, Trash2, Printer, Truck, Recycle, ClipboardList, Calenda
 import { C, FONTS, Card, SectionTitle } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 import { printDocument } from "../lib/pdf";
+import { fmtCaract } from "./StocksLive";
 
 // Fiches magasin/chantier — documents générés (PDF navigateur via printDocument),
 // tous rattachés à un projet. Certaines dérivées des données (inventaire, stock
@@ -11,7 +12,8 @@ import { printDocument } from "../lib/pdf";
 type ChantierRef = { id: string; nom: string };
 type Ref = { id: string; nom: string };
 type Article = { id: string; designation: string; unite: string; stock: number; seuil: number; chantierId: string | null };
-type Mouvement = { articleId: string; type: string; quantite: number; motif: string | null; caracteristiques: { note?: string } | null; date: string };
+type Caract = { poids?: string; longueur?: string; surface?: string; note?: string };
+type Mouvement = { articleId: string; type: string; quantite: number; motif: string | null; caracteristiques: Caract | null; date: string };
 type Journal = { chantierId: string; date: string; auteur: string; meteo: string | null; texte: string };
 type Ligne = { designation: string; qte: string; unite: string };
 
@@ -90,7 +92,7 @@ export default function FichesLive() {
     const rets = mouvements.filter((m) => m.type === "RETOUR" && ids.has(m.articleId));
     const body = header("Fiche de collecte — matériaux résiduels & rebus", `Périmètre : ${scopeNom()}`) +
       (rets.length
-        ? tableHtml(["Date", "Matériau", "Quantité", "Caractéristiques"], rets.map((m) => { const a = artNom(m.articleId); return [fdate(m.date), a?.designation ?? "—", `${Number(m.quantite)} ${a?.unite ?? ""}`.trim(), m.caracteristiques?.note ?? "—"]; }))
+        ? tableHtml(["Date", "Matériau", "Quantité", "Caractéristiques"], rets.map((m) => { const a = artNom(m.articleId); return [fdate(m.date), a?.designation ?? "—", `${Number(m.quantite)} ${a?.unite ?? ""}`.trim(), fmtCaract(m.caracteristiques)]; }))
         : `<p class="muted">Aucun résiduel enregistré pour ce périmètre.</p>`) +
       `<p class="muted" style="margin-top:24px">Collecté par : ____________________ &nbsp;&nbsp; Destination magasin : ____________________</p>`;
     printDocument(`Collecte-residuels-${scopeNom()}`, body);
@@ -118,6 +120,19 @@ export default function FichesLive() {
         ? js.map((j) => `<p style="margin:10px 0 2px"><b>${fdate(j.date)} — ${esc(j.auteur)}</b>${j.meteo ? ` <span class="muted">(${esc(j.meteo)})</span>` : ""}</p><p style="margin:0">${esc(j.texte)}</p>`).join("")
         : `<p class="muted">Aucune entrée de journal pour ce chantier.</p>`);
     printDocument(`Rapport-journalier-${scopeNom()}`, body);
+  }
+
+  // ── Fiche de besoin puisant dans les résiduels disponibles (P3.1) ──
+  function genBesoinResiduels() {
+    const ids = new Set(scopedArticles().map((a) => a.id));
+    const rets = mouvements.filter((m) => m.type === "RETOUR" && ids.has(m.articleId));
+    const body = header("Fiche de besoin — résiduels réutilisables", `Périmètre : ${scopeNom()}`) +
+      `<p class="muted">Résiduels disponibles au magasin. Cocher/renseigner la quantité à mobiliser pour le besoin.</p>` +
+      (rets.length
+        ? tableHtml(["Matériau", "Disponible", "Caractéristiques", "Qté demandée", "Affectation"], rets.map((m) => { const a = artNom(m.articleId); return [a?.designation ?? "—", `${Number(m.quantite)} ${a?.unite ?? ""}`.trim(), fmtCaract(m.caracteristiques), "__________", "__________"]; }))
+        : `<p class="muted">Aucun résiduel disponible pour ce périmètre.</p>`) +
+      `<p class="muted" style="margin-top:24px">Demandé par : ____________________ &nbsp;&nbsp; Approuvé (MOE) : ____________________</p>`;
+    printDocument(`Besoin-residuels-${scopeNom()}`, body);
   }
 
   // ── 5. Fiche d'inventaire (snapshot stock du périmètre) ──
@@ -175,6 +190,12 @@ export default function FichesLive() {
           <div style={{ fontWeight: 700, color: C.steel, display: "flex", alignItems: "center", gap: 8 }}><Recycle size={16} color={C.orange} /> Collecte résiduels & rebus</div>
           <div style={{ fontSize: 12, color: C.steelSoft }}>À partir des retours magasin (mouvements RETOUR) du périmètre.</div>
           {btn(genCollecte, "Générer PDF", Printer)}
+        </Card>
+        <Card style={{ display: "grid", gap: 10 }}>
+          <div style={derive}>Auto</div>
+          <div style={{ fontWeight: 700, color: C.steel, display: "flex", alignItems: "center", gap: 8 }}><Recycle size={16} color={C.orange} /> Fiche de besoin — résiduels</div>
+          <div style={{ fontSize: 12, color: C.steelSoft }}>Résiduels disponibles à mobiliser pour un futur besoin.</div>
+          {btn(genBesoinResiduels, "Générer PDF", Printer)}
         </Card>
         <Card style={{ display: "grid", gap: 10 }}>
           <div style={derive}>Auto</div>
