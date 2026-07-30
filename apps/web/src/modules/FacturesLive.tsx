@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, FileText } from "lucide-react";
-import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa, EmptyState, Skeleton, useToast, btnPrimary } from "@tank/ui";
+import { C, FONTS, Card, StatutBadge, SectionTitle, fcfa, EmptyState, Skeleton, useToast, btnPrimary, btnGhost, Modal, Field, fieldInput } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 import { humanError } from "../lib/errors";
 
 type Facture = { id: string; numero: string; client: string; ttc: number; statut: string };
 const STATUTS = ["Brouillon", "Envoyée", "Payée", "Impayée"];
+const MODES = ["MOMO", "OM", "VIREMENT", "ESPECES"];
 
 export default function FacturesLive() {
   const [rows, setRows] = useState<Facture[]>([]);
@@ -14,6 +15,10 @@ export default function FacturesLive() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ client: "", ttc: "", statut: "Brouillon" });
   const [busy, setBusy] = useState(false);
+  // Paiement en modale (remplace window.prompt) : facture ciblée + saisie montant/mode.
+  const [pay, setPay] = useState<Facture | null>(null);
+  const [payF, setPayF] = useState({ montant: "", mode: "MOMO" });
+  const [payBusy, setPayBusy] = useState(false);
   const toast = useToast();
 
   async function load() {
@@ -54,16 +59,23 @@ export default function FacturesLive() {
     }, 5000);
     toast({ message: `Facture ${f.numero} supprimée`, tone: "info", duration: 5000, action: { label: "Annuler", onClick: () => { clearTimeout(timer); setRows((l) => [...l, f].sort((a, b) => b.numero.localeCompare(a.numero))); } } });
   }
-  async function paiement(f: Facture) {
-    const montant = Number(window.prompt(`Paiement facture ${f.numero} (TTC ${f.ttc}) — montant FCFA :`, String(f.ttc)));
-    if (!montant || montant <= 0) return;
-    const mode = (window.prompt("Mode (MOMO / OM / VIREMENT / ESPECES) :", "MOMO") ?? "MOMO").toUpperCase();
-    const { error: pe } = await supabase.from("paiements").insert({ id: crypto.randomUUID(), factureId: f.id, montant, mode, refTransaction: "SIM-" + Date.now(), date: new Date().toISOString() });
-    if (pe) return setErr(pe.message.includes("row-level") ? "Droits insuffisants (rôle) pour un paiement." : pe.message);
+  function paiement(f: Facture) { setPayF({ montant: String(f.ttc), mode: "MOMO" }); setPay(f); }
+  async function submitPay(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pay) return;
+    const f = pay;
+    const montant = Number(payF.montant);
+    if (!montant || montant <= 0) return toast({ message: "Montant invalide.", tone: "error" });
+    setPayBusy(true);
+    const { error: pe } = await supabase.from("paiements").insert({ id: crypto.randomUUID(), factureId: f.id, montant, mode: payF.mode, refTransaction: "SIM-" + Date.now(), date: new Date().toISOString() });
+    if (pe) { setPayBusy(false); return toast({ message: pe.message.includes("row-level") ? "Droits insuffisants (rôle) pour un paiement." : humanError(pe.message), tone: "error" }); }
     const { data: pays } = await supabase.from("paiements").select("montant").eq("factureId", f.id);
     const total = (pays ?? []).reduce((s, p) => s + Number(p.montant), 0);
-    if (total >= Number(f.ttc)) await supabase.from("factures").update({ statut: "Payée" }).eq("id", f.id);
+    const solde = total >= Number(f.ttc);
+    if (solde) await supabase.from("factures").update({ statut: "Payée" }).eq("id", f.id);
+    setPayBusy(false); setPay(null);
     void load();
+    toast({ message: `Paiement de ${fcfa(montant)} enregistré (${payF.mode})${solde ? " — facture soldée" : ""}`, tone: "success" });
   }
 
   const input: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
@@ -127,6 +139,25 @@ export default function FacturesLive() {
             </tbody>
           </table>
         </Card>
+      )}
+
+      {pay && (
+        <Modal title={`Paiement — ${pay.numero}`} onClose={() => !payBusy && setPay(null)}
+          footer={<>
+            <button type="button" onClick={() => setPay(null)} style={btnGhost}>Annuler</button>
+            <button type="submit" form="pay-form" disabled={payBusy} style={{ ...btnPrimary, justifyContent: "center" }}>{payBusy ? "…" : "Encaisser"}</button>
+          </>}>
+          <div style={{ fontSize: 13, color: C.steelSoft }}>Client <b style={{ color: C.steel }}>{pay.client}</b> · TTC <b style={{ color: C.steel }}>{fcfa(Number(pay.ttc))}</b></div>
+          <form id="pay-form" onSubmit={submitPay} style={{ display: "grid", gap: 12 }}>
+            <Field label="Montant reçu (FCFA)">
+              <input style={fieldInput} type="number" min="0" value={payF.montant} onChange={(e) => setPayF({ ...payF, montant: e.target.value })} autoFocus required />
+            </Field>
+            <Field label="Mode de règlement">
+              <select style={fieldInput} value={payF.mode} onChange={(e) => setPayF({ ...payF, mode: e.target.value })}>{MODES.map((m) => <option key={m}>{m}</option>)}</select>
+            </Field>
+            <div style={{ fontSize: 12, color: C.steelSoft }}>La facture passe à « Payée » dès que le cumul des paiements atteint le TTC.</div>
+          </form>
+        </Modal>
       )}
     </div>
   );
