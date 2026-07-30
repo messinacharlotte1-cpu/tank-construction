@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, ShieldAlert, ClipboardCheck, CheckSquare, Square } from "lucide-react";
-import { C, FONTS, Card, SectionTitle, Kpi } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, Kpi, EmptyState, SkeletonCard, useToast, btnPrimary } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
+import { humanError } from "../lib/errors";
 
 type Row = { id: string; chantier: string | null; date: string; gravite: string; description: string; mesure: string | null };
 type Check = { id: string; item: string; ok: boolean; ordre: number };
@@ -14,6 +15,7 @@ export default function IncidentsLive() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [f, setF] = useState({ chantier: "", gravite: "MINEUR", description: "", mesure: "" });
+  const toast = useToast();
 
   async function load() {
     setLoading(true); setTid(await getTenant());
@@ -33,10 +35,19 @@ export default function IncidentsLive() {
   async function create(e: React.FormEvent) {
     e.preventDefault(); if (!tid) return;
     const { error } = await supabase.from("incidents").insert({ id: crypto.randomUUID(), tenantId: tid, chantier: f.chantier || null, gravite: f.gravite, description: f.description, mesure: f.mesure || null, date: new Date().toISOString(), createdAt: new Date().toISOString() });
-    if (error) return setErr(error.message);
+    if (error) { setErr(humanError(error.message)); return toast({ message: humanError(error.message), tone: "error" }); }
     setF({ chantier: "", gravite: "MINEUR", description: "", mesure: "" }); void load();
+    toast({ message: "Incident enregistré", tone: "success" });
   }
-  async function del(id: string) { const { error } = await supabase.from("incidents").delete().eq("id", id); if (error) setErr(error.message); else setRows((r) => r.filter((x) => x.id !== id)); }
+  // Suppression avec annulation : retrait UI immédiat, delete DB différé 5 s.
+  function del(r: Row) {
+    setRows((l) => l.filter((x) => x.id !== r.id));
+    const timer = window.setTimeout(async () => {
+      const { error } = await supabase.from("incidents").delete().eq("id", r.id);
+      if (error) { setRows((l) => [r, ...l].sort((a, b) => b.date.localeCompare(a.date))); toast({ message: humanError(error.message), tone: "error" }); }
+    }, 5000);
+    toast({ message: "Incident supprimé", tone: "info", duration: 5000, action: { label: "Annuler", onClick: () => { clearTimeout(timer); setRows((l) => [r, ...l].sort((a, b) => b.date.localeCompare(a.date))); } } });
+  }
 
   const inp: React.CSSProperties = { padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: FONTS.sans };
   const critiques = rows.filter((r) => r.gravite === "CRITIQUE").length;
@@ -60,11 +71,15 @@ export default function IncidentsLive() {
           </div>
           <input style={inp} placeholder="Description de l'incident" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} required />
           <input style={inp} placeholder="Mesure corrective" value={f.mesure} onChange={(e) => setF({ ...f, mesure: e.target.value })} />
-          <button type="submit" style={{ justifySelf: "start", padding: "9px 16px", border: "none", borderRadius: 8, background: C.orange, color: C.white, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}><Plus size={15} /> Enregistrer</button>
+          <button type="submit" style={{ ...btnPrimary, justifySelf: "start" }}><Plus size={15} /> Enregistrer</button>
         </form>
       </Card>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
+      {loading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "start" }}>
+          <SkeletonCard /><SkeletonCard />
+        </div>
+      ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "start" }}>
           <Card>
             <SectionTitle icon={ClipboardCheck}>Checklist sécurité journalière</SectionTitle>
@@ -82,6 +97,9 @@ export default function IncidentsLive() {
 
           <Card>
             <SectionTitle icon={ShieldAlert}>Registre des incidents</SectionTitle>
+            {rows.length === 0 ? (
+              <EmptyState icon={ShieldAlert} title="Aucun incident" hint="Zéro incident enregistré — déclarez-en un via le formulaire ci-dessus si besoin." />
+            ) : (
             <div style={{ display: "grid", gap: 10 }}>
               {rows.map((r) => {
                 const [lab, col] = GRAV[r.gravite] ?? [r.gravite, C.steelSoft];
@@ -94,13 +112,13 @@ export default function IncidentsLive() {
                         <div style={{ marginTop: 4, color: C.steel }}>{r.description}</div>
                         {r.mesure && <div style={{ marginTop: 4, fontSize: 13, color: C.steelSoft }}>Mesure : {r.mesure}</div>}
                       </div>
-                      <button onClick={() => del(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red, alignSelf: "start" }}><Trash2 size={16} /></button>
+                      <button onClick={() => del(r)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red, alignSelf: "start" }}><Trash2 size={16} /></button>
                     </div>
                   </div>
                 );
               })}
-              {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucun incident enregistré.</div>}
             </div>
+            )}
           </Card>
         </div>
       )}

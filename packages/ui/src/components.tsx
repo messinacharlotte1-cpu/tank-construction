@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback, useContext, createContext } from "react";
 import { C, FONTS } from "./theme";
 
 // Keyframes globales (injectées une fois) : shimmer skeleton, respect reduced-motion.
@@ -226,6 +226,59 @@ export const SkeletonCard: React.FC = () => (
     <Skeleton h={12} w="40%" />
   </div>
 );
+
+// ---- Toasts : feedback non bloquant + action « Annuler » (undo) --------------
+// Remplace le rechargement silencieux : chaque mutation confirme visuellement.
+// tone pilote la couleur ; action = { label, onClick } affiche un bouton (undo).
+export type ToastTone = "success" | "error" | "info";
+export type ToastInput = { message: React.ReactNode; tone?: ToastTone; action?: { label: string; onClick: () => void }; duration?: number };
+type ToastItem = ToastInput & { id: number };
+
+const ToastCtx = createContext<(t: ToastInput) => void>(() => {});
+// Hook consommé par les modules : const toast = useToast(); toast({ message, tone, action }).
+export const useToast = () => useContext(ToastCtx);
+
+const TONE_MAP: Record<ToastTone, [string, string]> = {
+  success: [C.green, C.greenSoft],
+  error: [C.red, C.redSoft],
+  info: [C.steel, C.concrete],
+};
+
+export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [items, setItems] = useState<ToastItem[]>([]);
+  const remove = useCallback((id: number) => setItems((l) => l.filter((t) => t.id !== id)), []);
+  const push = useCallback((t: ToastInput) => {
+    const id = Date.now() + Math.random();
+    setItems((l) => [...l, { ...t, id }]);
+    // Undo laisse plus de temps (6 s) ; sinon 3,5 s.
+    const ms = t.duration ?? (t.action ? 6000 : 3500);
+    window.setTimeout(() => remove(id), ms);
+  }, [remove]);
+  return (
+    <ToastCtx.Provider value={push}>
+      {children}
+      <div style={{ position: "fixed", right: 18, bottom: 18, zIndex: 2000, display: "grid", gap: 10, maxWidth: "calc(100vw - 36px)" }}>
+        {items.map((t) => {
+          const [accent, soft] = TONE_MAP[t.tone ?? "info"];
+          return (
+            <div key={t.id} role="status" aria-live="polite"
+              style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 260, maxWidth: 400, background: C.white, border: `1px solid ${C.line}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: "11px 14px", boxShadow: "0 12px 32px rgba(27,37,48,.18)", fontSize: 13.5, color: C.steel }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+              <span style={{ flex: 1, lineHeight: 1.4 }}>{t.message}</span>
+              {t.action && (
+                <button onClick={() => { t.action!.onClick(); remove(t.id); }}
+                  style={{ background: soft, color: accent, border: "none", borderRadius: 7, padding: "5px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FONTS.sans, flexShrink: 0 }}>
+                  {t.action.label}
+                </button>
+              )}
+              <button onClick={() => remove(t.id)} aria-label="Fermer" style={{ background: "none", border: "none", cursor: "pointer", color: C.steelSoft, fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
+            </div>
+          );
+        })}
+      </div>
+    </ToastCtx.Provider>
+  );
+};
 
 export const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void }> = ({ on, onChange }) => (
   <button
