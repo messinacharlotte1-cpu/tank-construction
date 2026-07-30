@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Download, Wallet, PieChart as PieChartIcon } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { C, FONTS, Card, Progress, SectionTitle, fcfa } from "@tank/ui";
+import { C, FONTS, Card, Progress, SectionTitle, fcfa, Chips } from "@tank/ui";
 import { supabase } from "../lib/supabase";
 
 type Ch = { nom: string; statut: string; perimetre: string | null; budget: number; consomme: number; avancementReel: number };
@@ -95,19 +95,8 @@ export default function RentabiliteLive() {
         <div style={{ fontSize: 13, color: C.steelSoft }}>Garde-fou : alerte si consommé &gt; <b>{seuil}%</b> du budget. Reste à encaisser : <b>{fcfa(facture - encaisse)}</b>.</div>
         <button onClick={exportCsv} style={{ display: "flex", alignItems: "center", gap: 6, background: C.steelMid, color: C.white, border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}><Download size={15} /> Export SYSCOHADA (CSV)</button>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: C.steelSoft, fontWeight: 600, textTransform: "uppercase" }}>Corps d'état :</span>
-        {FILTRES.map((c) => {
-          const actif = filtre === c.key;
-          const n = c.key === "ALL" ? rows.length : rows.filter((x) => (x.perimetre ?? "") === c.key).length;
-          return (
-            <button key={c.key} onClick={() => setFiltre(c.key)}
-              style={{ padding: "6px 12px", borderRadius: 999, border: `1px solid ${actif ? C.orange : C.line}`, background: actif ? C.orange : "transparent", color: actif ? C.white : C.steel, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-              {c.label} ({n})
-            </button>
-          );
-        })}
-      </div>
+      <Chips label="Corps d'état" value={filtre} onChange={(k) => setFiltre(k as Filtre)}
+        options={FILTRES.map((c) => ({ key: c.key, label: c.label, count: c.key === "ALL" ? rows.length : rows.filter((x) => (x.perimetre ?? "") === c.key).length }))} />
       {filtre !== "ALL" && (
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13, color: C.steel, background: C.concrete, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 14px" }}>
           <span><b>{PERIMETRE_LABEL[filtre]}</b> — {vis.length} chantier(s)</span>

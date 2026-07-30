@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Gavel, Banknote } from "lucide-react";
-import { C, FONTS, Card, SectionTitle, fcfa } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, fcfa, EmptyState, SkeletonCard } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Row = { id: string; nom: string; corpsEtat: string; chantier: string | null; montantMarche: number; retenueGarantiePct: number };
@@ -47,7 +47,9 @@ export default function SousTraitanceLive() {
         </form>
       </Card>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
+      {loading ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>{Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}</div> : rows.length === 0 ? (
+        <EmptyState icon={Gavel} title="Aucun sous-traitant" hint="Déclarez vos sous-traitants (corps d'état, montant du marché, retenue de garantie) via le formulaire ci-dessus." />
+      ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
           {rows.map((r) => (
             <Card key={r.id} style={{ padding: 18 }}>
@@ -63,7 +65,6 @@ export default function SousTraitanceLive() {
               </div>
             </Card>
           ))}
-          {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucun sous-traitant.</div>}
         </div>
       )}
     </div>

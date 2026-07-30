@@ -7,7 +7,9 @@ if (typeof document !== "undefined" && !document.getElementById("tank-ui-keyfram
   s.id = "tank-ui-keyframes";
   s.textContent =
     "@keyframes tankshimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}" +
-    "@media (prefers-reduced-motion: reduce){[data-tankskel]{animation:none!important}}";
+    "@media (prefers-reduced-motion: reduce){[data-tankskel]{animation:none!important}}" +
+    // Anneau de focus clavier cohérent (a11y) — n'affecte pas le clic souris.
+    "button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[role=button]:focus-visible{outline:2px solid #F26B1D;outline-offset:2px;border-radius:6px}";
   document.head.appendChild(s);
 }
 
@@ -184,6 +186,23 @@ export const ConfirmModal: React.FC<{ title?: string; message: React.ReactNode; 
     </>}>
     <div style={{ fontSize: 14, color: C.steel, lineHeight: 1.5 }}>{message}</div>
   </Modal>
+);
+
+// Puces de filtre (segmented control arrondi) — pattern unique, réutilisable.
+export type ChipOption = { key: string; label: React.ReactNode; count?: number };
+export const Chips: React.FC<{ options: ChipOption[]; value: string; onChange: (k: string) => void; label?: string }> = ({ options, value, onChange, label }) => (
+  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+    {label && <span style={{ fontSize: 12, color: C.steelSoft, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</span>}
+    {options.map((o) => {
+      const on = value === o.key;
+      return (
+        <button key={o.key} onClick={() => onChange(o.key)} aria-pressed={on}
+          style={{ padding: "6px 12px", borderRadius: 999, border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "transparent", color: on ? C.white : C.steel, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: FONTS.sans }}>
+          {o.label}{typeof o.count === "number" ? ` (${o.count})` : ""}
+        </button>
+      );
+    })}
+  </div>
 );
 
 // État vide = feature : icône + titre + contexte + action primaire (jamais un cul-de-sac gris).

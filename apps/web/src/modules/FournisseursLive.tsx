@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Phone, Truck, Star } from "lucide-react";
-import { C, FONTS, Card, SectionTitle } from "@tank/ui";
+import { C, FONTS, Card, SectionTitle, EmptyState, SkeletonCard } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Row = { id: string; nom: string; categorie: string | null; contact: string | null; telephone: string | null; note: number };
@@ -43,7 +43,9 @@ export default function FournisseursLive() {
         </form>
       </Card>
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
-      {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
+      {loading ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>{Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}</div> : rows.length === 0 ? (
+        <EmptyState icon={Truck} title="Aucun fournisseur" hint="Ajoutez vos fournisseurs de matériaux et de services via le formulaire ci-dessus — ils seront proposés dans les commandes." />
+      ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
           {rows.map((r) => (
             <Card key={r.id} style={{ padding: 18 }}>
@@ -65,7 +67,6 @@ export default function FournisseursLive() {
               </div>
             </Card>
           ))}
-          {rows.length === 0 && <div style={{ color: C.steelSoft }}>Aucun fournisseur.</div>}
         </div>
       )}
     </div>

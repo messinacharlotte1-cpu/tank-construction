@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload, Trash2, ArrowLeft, MapPin, ImageIcon, FileText } from "lucide-react";
-import { C, FONTS, Card } from "@tank/ui";
+import { C, FONTS, Card, Chips, Modal, Field, fieldInput, btnGhost, btnPrimary } from "@tank/ui";
 import { supabase, getTenant } from "../lib/supabase";
 
 type Annot = { x: number; y: number; note: string; resolu: boolean };
@@ -37,6 +37,9 @@ export default function MediasLive() {
   const [filtre, setFiltre] = useState<Categorie | "ALL">("ALL");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Media | null>(null);
+  const [pin, setPin] = useState<{ x: number; y: number } | null>(null);
+  const [note, setNote] = useState("");
+  const [pinIdx, setPinIdx] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -112,13 +115,12 @@ export default function MediasLive() {
                 const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 const x = ((e.clientX - r.left) / r.width) * 100;
                 const y = ((e.clientY - r.top) / r.height) * 100;
-                const note = window.prompt("Note de la réserve :");
-                if (note) void saveAnnots(open, [...annots, { x, y, note, resolu: false }]);
+                setPin({ x, y }); setNote("");
               }}>
               <img src={open.url} alt={open.nom} style={{ maxWidth: "100%", borderRadius: 10, display: "block" }} />
               {annots.map((a, i) => (
                 <button key={i} title={a.note}
-                  onClick={(e) => { e.stopPropagation(); const act = window.confirm(`"${a.note}"\nOK = ${a.resolu ? "rouvrir" : "lever"} · Annuler = supprimer`); const next = act ? annots.map((x, j) => j === i ? { ...x, resolu: !x.resolu } : x) : annots.filter((_, j) => j !== i); void saveAnnots(open, next); }}
+                  onClick={(e) => { e.stopPropagation(); setPinIdx(i); }}
                   style={{ position: "absolute", left: `${a.x}%`, top: `${a.y}%`, transform: "translate(-50%,-100%)", background: a.resolu ? C.green : C.red, color: C.white, border: "2px solid white", borderRadius: "50% 50% 50% 0", width: 22, height: 22, cursor: "pointer", display: "grid", placeItems: "center", padding: 0 }}>
                   <MapPin size={12} />
                 </button>
@@ -126,6 +128,31 @@ export default function MediasLive() {
             </div>
           </>
         )}
+
+        {pin && (
+          <Modal title="Nouvelle réserve" onClose={() => { setPin(null); setNote(""); }}
+            footer={<>
+              <button style={btnGhost} onClick={() => { setPin(null); setNote(""); }}>Annuler</button>
+              <button style={btnPrimary} disabled={!note.trim()} onClick={() => { if (note.trim()) void saveAnnots(open, [...(open.annotations ?? []), { x: pin.x, y: pin.y, note: note.trim(), resolu: false }]); setPin(null); setNote(""); }}>Ajouter</button>
+            </>}>
+            <Field label="Note de la réserve"><input style={fieldInput} value={note} autoFocus onChange={(e) => setNote(e.target.value)} placeholder="ex : fissure sur enduit à reprendre" /></Field>
+          </Modal>
+        )}
+
+        {pinIdx !== null && (() => {
+          const a = (open.annotations ?? [])[pinIdx];
+          if (!a) return null;
+          return (
+            <Modal title="Réserve épinglée" onClose={() => setPinIdx(null)}
+              footer={<>
+                <button style={{ ...btnGhost, color: C.red, borderColor: C.red }} onClick={() => { const next = (open.annotations ?? []).filter((_, j) => j !== pinIdx); void saveAnnots(open, next); setPinIdx(null); }}>Supprimer</button>
+                <button style={btnPrimary} onClick={() => { const next = (open.annotations ?? []).map((x, j) => j === pinIdx ? { ...x, resolu: !x.resolu } : x); void saveAnnots(open, next); setPinIdx(null); }}>{a.resolu ? "Rouvrir" : "Lever"}</button>
+              </>}>
+              <div style={{ fontSize: 14, color: C.steel }}>{a.note}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: a.resolu ? C.green : C.red }}>{a.resolu ? "Levée" : "Ouverte"}</div>
+            </Modal>
+          );
+        })()}
       </div>
     );
   }
@@ -146,18 +173,8 @@ export default function MediasLive() {
         <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ display: "flex", alignItems: "center", gap: 6, background: C.orange, color: C.white, border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontWeight: 700 }}><Upload size={16} /> {busy ? "Upload…" : "Ajouter"}</button>
       </Card>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {([{ key: "ALL", label: "Tout" }, ...CATS] as { key: Categorie | "ALL"; label: string }[]).map((c) => {
-          const actif = filtre === c.key;
-          const n = c.key === "ALL" ? rows.length : rows.filter((m) => m.categorie === c.key).length;
-          return (
-            <button key={c.key} onClick={() => setFiltre(c.key)}
-              style={{ padding: "6px 12px", borderRadius: 999, border: `1px solid ${actif ? C.orange : C.line}`, background: actif ? C.orange : "transparent", color: actif ? C.white : C.steel, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-              {c.label} ({n})
-            </button>
-          );
-        })}
-      </div>
+      <Chips value={filtre} onChange={(k) => setFiltre(k as Categorie | "ALL")}
+        options={[{ key: "ALL", label: "Tout", count: rows.length }, ...CATS.map((c) => ({ key: c.key, label: c.label, count: rows.filter((m) => m.categorie === c.key).length }))]} />
 
       {err && <Card style={{ borderColor: C.red, color: C.red }}>{err}</Card>}
       {loading ? <div style={{ color: C.steelSoft }}>Chargement…</div> : (
