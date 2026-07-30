@@ -9,6 +9,7 @@ import Shell from "./app/Shell";
 import ClientPortal from "./modules/ClientPortal";
 import Vitrine from "./modules/Vitrine";
 import MfaChallenge from "./auth/MfaChallenge";
+import PendingScreen from "./auth/PendingScreen";
 
 // Rôles clients externes → portail dédié (hors espace de gestion).
 const CLIENT_ROLES = ["ACQUEREUR", "MO"];
@@ -42,6 +43,8 @@ export default function App() {
   if (needMfa) return <MfaChallenge onDone={() => setNeedMfa(false)} />;
   // Rôle pas encore résolu → évite un flash de l'espace de gestion pour un client.
   if (role === null) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: C.steelSoft }}>Chargement…</div>;
+  // Compte pas encore validé (actif=false) → current_role renvoie 'EN_ATTENTE'. Aucun accès.
+  if (role === "EN_ATTENTE" || role === "") return <PendingScreen email={session.user.email} />;
   if (CLIENT_ROLES.includes(role)) return <ClientPortal email={session.user.email} />;
 
   return <Shell email={session.user.email} />;
